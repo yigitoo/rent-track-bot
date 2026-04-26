@@ -9,6 +9,7 @@ const { mongoSessionStore } = require('./utils/sessionStore');
 const addTenantWizard = require('./scenes/addTenantWizard');
 const editTenantWizard = require('./scenes/editTenantWizard');
 const addPaymentWizard = require('./scenes/addPaymentWizard');
+const deferRentWizard = require('./scenes/deferRentWizard');
 
 const registerStartCommands = require('./commands/start');
 const registerTenantCommands = require('./commands/tenant');
@@ -26,6 +27,7 @@ async function main() {
     addTenantWizard,
     editTenantWizard,
     addPaymentWizard,
+    deferRentWizard,
   ]);
 
   bot.use(session({ store: mongoSessionStore() }));

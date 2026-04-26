@@ -1,6 +1,7 @@
 const Tenant = require('../models/tenant');
 const Payment = require('../models/payment');
-const { formatCurrency, formatMonthYear, currentMonth } = require('../utils/format');
+const { formatCurrency, formatDate, formatMonthYear, currentMonth } = require('../utils/format');
+const { buildPaymentsByTenant, getMonthlyStatuses } = require('../utils/rentSchedule');
 const dayjs = require('dayjs');
 const customParseFormat = require('dayjs/plugin/customParseFormat');
 dayjs.extend(customParseFormat);
@@ -28,16 +29,12 @@ module.exports = function registerSummaryCommands(bot) {
 
     const payments = await Payment.find({ month, year });
 
-    const paymentsByTenant = {};
-    for (const p of payments) {
-      const tid = p.tenant.toString();
-      if (!paymentsByTenant[tid]) paymentsByTenant[tid] = 0;
-      paymentsByTenant[tid] += p.amount;
-    }
+    const paymentsByTenant = buildPaymentsByTenant(payments);
+    const statuses = getMonthlyStatuses(tenants, paymentsByTenant, month, year);
 
     const totalExpected = tenants.reduce((sum, t) => sum + t.rentAmount, 0);
-    const totalReceived = Object.values(paymentsByTenant).reduce((sum, a) => sum + a, 0);
-    const paidCount = Object.keys(paymentsByTenant).length;
+    const totalReceived = payments.reduce((sum, p) => sum + p.amount, 0);
+    const paidCount = statuses.filter((s) => s.paid).length;
 
     let text = `--- ${formatMonthYear(month, year)} Özet ---\n\n`;
     text += `Beklenen:  ${formatCurrency(totalExpected)} (${tenants.length} kiracı)\n`;
@@ -45,12 +42,14 @@ module.exports = function registerSummaryCommands(bot) {
     text += `Kalan:     ${formatCurrency(totalExpected - totalReceived)}\n\n`;
     text += `Detay:\n`;
 
-    for (const tenant of tenants) {
-      const tid = tenant._id.toString();
-      const paidAmount = paymentsByTenant[tid] || 0;
-      const status = paidAmount >= tenant.rentAmount ? 'ÖDENDİ' :
-        paidAmount > 0 ? `EKSİK (${formatCurrency(paidAmount)}/${formatCurrency(tenant.rentAmount)})` : 'ÖDENMEDİ';
-      text += `  ${tenant.name} - ${formatCurrency(tenant.rentAmount)} - ${status}\n`;
+    for (const item of statuses) {
+      const status = item.paid ? 'ÖDENDİ' :
+        item.partial ? `EKSİK (${formatCurrency(item.totalPaid)}/${formatCurrency(item.expected)})` :
+        item.status === 'overdue' ? `GECİKTİ (${item.daysOverdue} gün)` :
+        item.status === 'upcoming' ? `YAKLAŞIYOR (${formatDate(item.dueDate)})` :
+        `ÖDENECEK (${formatDate(item.dueDate)})`;
+      const deferredTag = item.isDeferred ? ' - ERTELENDİ' : '';
+      text += `  ${item.tenant.name} - ${formatCurrency(item.expected)} - ${status}${deferredTag}\n`;
     }
 
     await ctx.reply(text);

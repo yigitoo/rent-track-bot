@@ -6,6 +6,7 @@ const { Markup } = require('telegraf');
 
 module.exports = function registerPaymentCommands(bot) {
   bot.command('odemeekle', (ctx) => ctx.scene.enter('add_payment_wizard'));
+  bot.command('kiraertele', (ctx) => ctx.scene.enter('defer_rent_wizard'));
 
   bot.command('odemeler', async (ctx) => {
     const tenants = await Tenant.find({ isActive: true });

@@ -14,7 +14,7 @@ module.exports = function registerTenantCommands(bot) {
     }
 
     const lines = tenants.map((t, i) =>
-      `${i + 1}. ${t.name}\n   ${t.address}\n   Kira: ${formatCurrency(t.rentAmount)}`
+      `${i + 1}. ${t.name}\n   ${t.address}\n   Kira: ${formatCurrency(t.rentAmount)}\n   Ödeme günü: Her ayın ${t.paymentDay || 1}. günü`
     );
     await ctx.reply(lines.join('\n\n'));
   });

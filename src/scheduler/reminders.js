@@ -1,8 +1,9 @@
 const cron = require('node-cron');
 const Tenant = require('../models/tenant');
 const Payment = require('../models/payment');
-const { formatCurrency, formatMonthYear, currentMonth, now } = require('../utils/format');
+const { formatCurrency, formatDate, formatMonthYear, currentMonth } = require('../utils/format');
 const { sendMail } = require('../utils/mailer');
+const { buildPaymentsByTenant, getMonthlyStatuses } = require('../utils/rentSchedule');
 
 function setupReminders(bot) {
   const chatId = process.env.OWNER_CHAT_ID;
@@ -15,14 +16,14 @@ function setupReminders(bot) {
       const tenants = await Tenant.find({ isActive: true });
       const payments = await Payment.find({ month, year });
 
-      const paidTenantIds = new Set(payments.map((p) => p.tenant.toString()));
-      const unpaid = tenants.filter((t) => !paidTenantIds.has(t._id.toString()));
+      const paymentsByTenant = buildPaymentsByTenant(payments);
+      const overdue = getMonthlyStatuses(tenants, paymentsByTenant, month, year)
+        .filter((status) => !status.paid && status.daysOverdue > 0);
 
-      if (!unpaid.length) return;
+      if (!overdue.length) return;
 
-      const day = now().date();
-      const lines = unpaid.map((t) =>
-        `  - ${t.name} (${formatCurrency(t.rentAmount)}) - ${day - 1} gün gecikmiş`
+      const lines = overdue.map((item) =>
+        `  - ${item.tenant.name} (${formatCurrency(item.remaining)}) - ${formatDate(item.dueDate)} tarihinden beri ${item.daysOverdue} gün gecikmiş`
       );
 
       const message = `Gecikmiş Ödeme Uyarısı (${formatMonthYear(month, year)}):\n${lines.join('\n')}`;
@@ -46,7 +47,7 @@ function setupReminders(bot) {
       if (!tenants.length) return;
 
       const total = tenants.reduce((sum, t) => sum + t.rentAmount, 0);
-      const lines = tenants.map((t) => `  - ${t.name}: ${formatCurrency(t.rentAmount)}`);
+      const lines = tenants.map((t) => `  - ${t.name}: ${formatCurrency(t.rentAmount)} (her ayın ${t.paymentDay || 1}. günü)`);
 
       const message = `Yeni Ay - ${formatMonthYear(month, year)}\n\n` +
         `Beklenen toplam: ${formatCurrency(total)}\n` +
