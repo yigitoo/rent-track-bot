@@ -30,18 +30,27 @@ async function monthReport(month, year) {
     loadDueItems(),
   ]);
 
-  const grid = buildYearGrid({ year, tenants, payments });
+  /* Arşivlenmiş bir kiracı o dönemde ödeme yapmış olabilir. Tabloda kalmazsa
+     tahsilat toplamı satırlarla uyuşmaz; beklenene katılmaz ama görünür. */
+  const activeIds = new Set(tenants.map((tenant) => tenant._id.toString()));
+  const missingIds = Array.from(new Set(payments.map((item) => item.tenant.toString())))
+    .filter((id) => !activeIds.has(id));
+  const archived = missingIds.length ? await Tenant.find({ _id: { $in: missingIds } }) : [];
+
+  const grid = buildYearGrid({ year, tenants: [...tenants, ...archived], payments });
   const rows = grid.rows.map((row) => {
     const cell = row.months[month - 1];
+    const isArchived = !activeIds.has(row.tenantId);
     return {
       tenantId: row.tenantId,
       name: row.name,
       address: row.address,
       paymentDay: row.paymentDay,
-      expected: cell.inside ? cell.expected : 0,
+      archived: isArchived,
+      expected: isArchived || !cell.inside ? 0 : cell.expected,
       paid: cell.paid,
-      remaining: cell.inside ? cell.remaining : 0,
-      status: cell.status,
+      remaining: isArchived || !cell.inside ? 0 : cell.remaining,
+      status: isArchived ? 'archived' : cell.status,
       dueDate: cell.dueDate,
       lastDate: cell.lastDate,
       isDeferred: cell.isDeferred,
@@ -49,7 +58,7 @@ async function monthReport(month, year) {
     };
   }).sort((a, b) => a.name.localeCompare(b.name, 'tr'));
 
-  const nameById = new Map(tenants.map((tenant) => [tenant._id.toString(), tenant.name]));
+  const nameById = new Map([...tenants, ...archived].map((tenant) => [tenant._id.toString(), tenant.name]));
   const expected = rows.reduce((sum, row) => sum + row.expected, 0);
   const received = payments.reduce((sum, item) => sum + item.amount, 0);
   const expense = expenses.reduce((sum, item) => sum + item.amount, 0);

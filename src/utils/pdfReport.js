@@ -301,6 +301,7 @@ const STATUS_STYLE = {
   pending: { label: 'Ödenecek', color: C.ink2, bg: null },
   future: { label: 'Sırada', color: C.ink3, bg: null },
   outside: { label: 'Kiracı değil', color: C.ink3, bg: null },
+  archived: { label: 'Arşiv', color: C.ink3, bg: C.lineSoft },
 };
 
 /* Aylık dönem raporu · A4 dikey. Bir ayın defteri: kim ödedi, kim kaldı,
@@ -341,7 +342,7 @@ function buildMonthReportPdf(report) {
     rows: report.rows.map((row) => {
       const style = STATUS_STYLE[row.status] || STATUS_STYLE.pending;
       return [
-        { text: row.name, font: 'semi' },
+        { text: row.name + (row.archived ? ' (arşiv)' : ''), font: 'semi' },
         formatCurrency(row.expected),
         { text: formatCurrency(row.paid), color: row.paid ? C.accent : C.ink3, font: 'semi' },
         { text: formatCurrency(row.remaining), color: row.remaining > 0 ? C.bad : C.ink3 },
