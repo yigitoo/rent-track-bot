@@ -3,6 +3,7 @@ const Tenant = require('../models/tenant');
 const { formatCurrency } = require('../utils/format');
 const { tenantListKeyboard, cancelKeyboard } = require('../utils/keyboard');
 const { normalizePaymentDay } = require('../utils/rentSchedule');
+const { notifyTenantUpdated } = require('../services/notificationService');
 
 const editTenantWizard = new Scenes.WizardScene(
   'edit_tenant_wizard',
@@ -72,6 +73,7 @@ editTenantWizard.on('text', async (ctx) => {
     { new: true }
   );
 
+  await notifyTenantUpdated(tenant);
   await ctx.reply(
     `Güncellendi:\n` +
     `  Ad: ${tenant.name}\n` +

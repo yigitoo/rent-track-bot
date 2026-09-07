@@ -5,6 +5,25 @@ const tenantSchema = new Schema({
   address: { type: String, required: true, trim: true },
   rentAmount: { type: Number, required: true, min: 0 },
   paymentDay: { type: Number, required: true, min: 1, max: 31, default: 1 },
+
+  // Sözleşme ve iletişim
+  phone: { type: String, default: '', trim: true },
+  email: { type: String, default: '', trim: true },
+  contractStart: { type: Date, default: null },
+  contractEnd: { type: Date, default: null },
+  deposit: { type: Number, default: 0, min: 0 },
+  increaseRate: { type: Number, default: 0, min: 0, max: 200 },
+  notes: { type: String, default: '', trim: true },
+
+  // Kira her değiştiğinde bir satır düşer; eski tutar kaybolmaz
+  rentHistory: [{
+    amount: { type: Number, required: true },
+    previousAmount: { type: Number, default: 0 },
+    effectiveFrom: { type: Date, required: true },
+    note: { type: String, default: '', trim: true },
+    createdAt: { type: Date, default: Date.now },
+  }],
+
   deferments: [{
     month: { type: Number, required: true, min: 1, max: 12 },
     year: { type: Number, required: true },

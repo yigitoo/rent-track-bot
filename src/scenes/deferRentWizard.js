@@ -5,6 +5,7 @@ const Tenant = require('../models/tenant');
 const { tenantListKeyboard, cancelKeyboard } = require('../utils/keyboard');
 const { formatDate, formatMonthYear, currentMonth } = require('../utils/format');
 const { getTenantDueInfo } = require('../utils/rentSchedule');
+const { notifyRentDeferred } = require('../services/notificationService');
 
 dayjs.extend(customParseFormat);
 
@@ -108,6 +109,12 @@ deferRentWizard.on('text', async (ctx) => {
       note,
     });
     await tenant.save();
+    await notifyRentDeferred(tenant, {
+      month: ctx.wizard.state.month,
+      year: ctx.wizard.state.year,
+      dueDate: ctx.wizard.state.dueDate,
+      note,
+    });
 
     await ctx.reply(
       `Kira ertelendi:\n` +

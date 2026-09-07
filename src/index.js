@@ -14,9 +14,14 @@ const deferRentWizard = require('./scenes/deferRentWizard');
 const registerStartCommands = require('./commands/start');
 const registerTenantCommands = require('./commands/tenant');
 const registerPaymentCommands = require('./commands/payment');
-const registerStatusCommands = require('./commands/status');
 const registerSummaryCommands = require('./commands/summary');
+const registerGridCommands = require('./commands/grid');
+const registerDuesCommands = require('./commands/dues');
+const registerReportCommands = require('./commands/reports');
 const registerMailCommands = require('./commands/mail');
+const registerCalendarCommands = require('./commands/calendar');
+const registerNotificationCommands = require('./commands/notifications');
+const registerFinanceCommands = require('./commands/finance');
 
 async function main() {
   await connectDB();
@@ -37,9 +42,14 @@ async function main() {
   registerStartCommands(bot);
   registerTenantCommands(bot);
   registerPaymentCommands(bot);
-  registerStatusCommands(bot);
   registerSummaryCommands(bot);
+  registerGridCommands(bot);
+  registerDuesCommands(bot);
+  registerReportCommands(bot);
   registerMailCommands(bot);
+  registerCalendarCommands(bot);
+  registerNotificationCommands(bot);
+  registerFinanceCommands(bot);
 
   process.once('SIGINT', () => bot.stop('SIGINT'));
   process.once('SIGTERM', () => bot.stop('SIGTERM'));
@@ -47,7 +57,7 @@ async function main() {
   await bot.launch();
   console.log('Bot is running...');
 
-  setupReminders(bot);
+  setupReminders();
 }
 
 main().catch(console.error);

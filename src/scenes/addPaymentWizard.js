@@ -3,6 +3,7 @@ const Tenant = require('../models/tenant');
 const Payment = require('../models/payment');
 const { formatCurrency, formatDate, formatMonthYear, now } = require('../utils/format');
 const { tenantListKeyboard, confirmKeyboard, cancelKeyboard } = require('../utils/keyboard');
+const { notifyPaymentRecorded } = require('../services/notificationService');
 const dayjs = require('dayjs');
 const customParseFormat = require('dayjs/plugin/customParseFormat');
 dayjs.extend(customParseFormat);
@@ -136,14 +137,20 @@ async function showConfirmation(ctx) {
 addPaymentWizard.action('pay_confirm', async (ctx) => {
   await ctx.answerCbQuery();
   const s = ctx.wizard.state;
-  await Payment.create({
+  const payment = await Payment.create({
     tenant: s.tenantId,
     amount: s.amount,
     date: s.date,
     month: s.payMonth,
     year: s.payYear,
+    source: 'telegram',
   });
-  await ctx.reply('Ödeme kaydedildi.');
+  const tenant = await Tenant.findById(s.tenantId);
+  if (tenant) await notifyPaymentRecorded(payment, tenant, { source: 'telegram' });
+  await ctx.reply('Ödeme kaydedildi.', Markup.inlineKeyboard([
+    [Markup.button.callback('🧾 Ödeme tablosu', 'nav:grid')],
+    [Markup.button.callback('🏠 Ana menü', 'nav:home')],
+  ]));
   return ctx.scene.leave();
 });
 

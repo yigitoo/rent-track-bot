@@ -1,0 +1,254 @@
+"use client";
+
+import {
+  Buildings,
+  CaretLeft,
+  CaretRight,
+  CheckCircle,
+  Clock,
+  DownloadSimple,
+  Minus,
+  PencilSimple,
+  Plus,
+  Trash,
+  WarningCircle,
+} from "@phosphor-icons/react";
+import { downloadCsv, formatCurrency, formatDate } from "../lib/client";
+
+const MONTH_LONG = [
+  "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+  "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+];
+
+const CELL = {
+  paid: { label: "Ödendi", glyph: CheckCircle },
+  overdue: { label: "Gecikti", glyph: WarningCircle },
+  upcoming: { label: "Yaklaşıyor", glyph: Clock },
+  future: { label: "Sırada", glyph: Plus },
+  outside: { label: "Kapsam dışı", glyph: Minus },
+};
+
+const COMPACT = new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 });
+
+function cellTitle(row, cell) {
+  const period = MONTH_LONG[cell.month - 1];
+  const state = CELL[cell.status]?.label || "Sırada";
+  const tail = cell.paid ? "İşareti kaldırmak için dokunun." : "Ödendi olarak işaretlemek için dokunun.";
+  return `${row.title} · ${period} · ${state} · ${formatCurrency(cell.amount)}. ${tail}`;
+}
+
+export default function DuesView({
+  grid,
+  busy,
+  pending,
+  onYear,
+  onToggle,
+  onCreate,
+  onEdit,
+  onToggleActive,
+  onDelete,
+}) {
+  if (!grid) {
+    return (
+      <div className="view" aria-busy="true">
+        <div className="empty">
+          <Buildings weight="duotone" />
+          <strong>Aidat tablosu hazırlanıyor</strong>
+          <span>Yılın 12 ayı kalem kalem toplanıyor.</span>
+        </div>
+      </div>
+    );
+  }
+
+  const totals = grid.totals;
+
+  function exportCsv() {
+    downloadCsv(
+      "vedat-gayrimenkul-" + grid.year + "-aidat.csv",
+      ["Aidat kalemi", "İlgili kiracı", "Ayın günü", ...grid.monthLabels, "Beklenen", "Ödenen", "Açık", "Oran"],
+      grid.rows.map((row) => [
+        row.title,
+        row.tenantName || "Genel",
+        row.dayOfMonth,
+        ...row.months.map((cell) => (CELL[cell.status]?.label || "Sırada")),
+        row.expected,
+        row.settled,
+        row.outstanding,
+        row.rate + "%",
+      ])
+    );
+  }
+
+  return (
+    <div className="view" data-busy={busy} aria-busy={busy}>
+      <div className="view-bar">
+        <p className="view-summary">
+          {totals.dueCount} aidat kalemi · {totals.paidMonths} ay ödendi ·{" "}
+          {formatCurrency(totals.settled)} / {formatCurrency(totals.expected)}
+        </p>
+        <div className="view-actions">
+          <div className="period glass glass--chip">
+            <button type="button" onClick={() => onYear(grid.year - 1)} aria-label="Önceki yıl">
+              <CaretLeft weight="bold" />
+            </button>
+            <strong>{grid.year}</strong>
+            <button type="button" onClick={() => onYear(grid.year + 1)} aria-label="Sonraki yıl">
+              <CaretRight weight="bold" />
+            </button>
+          </div>
+          <button className="btn btn-glass btn-sm" type="button" onClick={exportCsv}>
+            <DownloadSimple weight="bold" />
+            Dışa aktar
+          </button>
+          <button className="btn btn-primary btn-sm" type="button" onClick={onCreate}>
+            <Plus weight="bold" />
+            Aidat ekle
+          </button>
+        </div>
+      </div>
+
+      <div className="pg-legend" role="note">
+        <span className="pg-key state-paid"><CheckCircle weight="fill" />Ödendi</span>
+        <span className="pg-key state-overdue"><WarningCircle weight="fill" />Gecikti</span>
+        <span className="pg-key state-pending"><Clock weight="fill" />Sırada</span>
+        <span className="pg-hint">
+          İşaretlenen ay aynı anda gider kaydı olur; giderlere, takvime ve raporlara yansır.
+        </span>
+      </div>
+
+      {grid.rows.length ? (
+        <div className="pg-list">
+          {grid.rows.map((row, index) => (
+            <article
+              className={"pg-card glass" + (row.isActive ? "" : " is-muted")}
+              key={row.dueId}
+              style={{ "--i": index }}
+            >
+              <header className="pg-head">
+                <div className="pg-who">
+                  <span className="avatar"><Buildings weight="fill" /></span>
+                  <span className="who-copy">
+                    <strong>{row.title}</strong>
+                    <span>
+                      {row.tenantName || "Genel gider"} · her ayın {row.dayOfMonth}. günü
+                      {row.isActive ? "" : " · duraklatıldı"}
+                    </span>
+                  </span>
+                </div>
+
+                <div className="pg-figures">
+                  <div className="pg-money">
+                    <strong className="num">{formatCurrency(row.settled)}</strong>
+                    <span>{row.paidMonths}/12 ay · {formatCurrency(row.amount)} aylık</span>
+                  </div>
+                  <div className="pg-actions">
+                    <button className="btn btn-quiet btn-sm" type="button" onClick={() => onEdit(row)}>
+                      <PencilSimple weight="bold" />
+                      Düzenle
+                    </button>
+                    <button
+                      className="btn btn-quiet btn-sm"
+                      type="button"
+                      onClick={() => onToggleActive(row)}
+                      aria-pressed={!row.isActive}
+                    >
+                      <Clock weight="bold" />
+                      {row.isActive ? "Duraklat" : "Sürdür"}
+                    </button>
+                    <button className="btn btn-quiet btn-sm" type="button" onClick={() => onDelete(row)}>
+                      <Trash weight="bold" />
+                      Sil
+                    </button>
+                  </div>
+                </div>
+              </header>
+
+              <div className="pg-track">
+                <div className={"spark " + (row.rate >= 100 ? "tone-ok" : "tone-accent")}>
+                  <i style={{ width: Math.min(row.rate, 100) + "%" }} />
+                </div>
+                <span className="pg-track-note">
+                  %{row.rate} ödendi
+                  {row.outstanding ? " · " + formatCurrency(row.outstanding) + " açık" : " · açık yok"}
+                </span>
+              </div>
+
+              <div className="pg-months" role="group" aria-label={row.title + " · " + grid.year + " ayları"}>
+                {row.months.map((cell) => {
+                  const info = CELL[cell.status] || CELL.future;
+                  const Glyph = info.glyph;
+                  const key = row.dueId + ":" + cell.month;
+                  const isPending = pending === key;
+                  return (
+                    <button
+                      key={cell.month}
+                      type="button"
+                      className={
+                        "pg-cell state-" + cell.status +
+                        (isPending ? " is-pending" : "") +
+                        (grid.currentMonth === cell.month ? " is-now" : "")
+                      }
+                      onClick={() => onToggle(row, cell)}
+                      disabled={isPending}
+                      aria-pressed={cell.paid}
+                      aria-label={cellTitle(row, cell)}
+                      title={cellTitle(row, cell)}
+                    >
+                      <span className="pg-cell-top">
+                        <span className="pg-cell-month">{cell.label}</span>
+                        <Glyph weight={cell.paid ? "fill" : "bold"} className="pg-cell-glyph" />
+                      </span>
+                      <span className="pg-cell-amount num">{COMPACT.format(cell.amount)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {row.endDate ? (
+                <p className="pg-note">
+                  <Clock weight="fill" />
+                  {formatDate(row.startDate)} – {formatDate(row.endDate)} arası geçerli
+                </p>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="empty">
+          <Buildings weight="duotone" />
+          <strong>Henüz aidat kalemi yok</strong>
+          <span>
+            Apartman ya da site aidatını ekleyin; her ayın 12 kutucuğu oluşur, işaretledikçe
+            gider ve raporlara işlenir.
+          </span>
+        </div>
+      )}
+
+      <article className="glass strip-panel" aria-label={grid.year + " aidat toplamı"}>
+        <p className="strip-title">{grid.year} aidat toplamı</p>
+        <div className="strip">
+          <div className="strip-item">
+            <strong className="num">{formatCurrency(totals.settled)}</strong>
+            <span>Ödenen</span>
+            <small>%{totals.rate} oran</small>
+          </div>
+          <div className="strip-item">
+            <strong className="num">{formatCurrency(totals.expected)}</strong>
+            <span>Beklenen</span>
+            <small>{totals.dueCount} kalem</small>
+          </div>
+          <div className="strip-item">
+            <strong className="num">{formatCurrency(totals.outstanding)}</strong>
+            <span>Açık aidat</span>
+            <small>{totals.openMonths} geciken ay</small>
+          </div>
+          <div className="strip-item">
+            <strong className="num">{totals.paidMonths}</strong>
+            <span>İşaretli ay</span>
+            <small>{totals.dueCount * 12} kutucuk</small>
+          </div>
+        </div>
+      </article>
+    </div>
+  );
+}

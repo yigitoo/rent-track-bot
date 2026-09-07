@@ -1,0 +1,41 @@
+{
+  "name": "Vedat Gayrimenkul",
+  "short_name": "Vedat Gayrimenkul",
+  "description": "Kiracı, ödeme ve bildirimleri tek akışta yönetin.",
+  "lang": "tr",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "id": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#e6ebf5",
+  "theme_color": "#e6ebf5",
+  "orientation": "portrait",
+  "categories": ["finance", "productivity"],
+  "shortcuts": [
+    { "name": "Ödeme ekle", "url": "/?ekran=odemeler&islem=odeme" },
+    { "name": "Takvim", "url": "/?ekran=takvim" },
+    { "name": "Kiracılar", "url": "/?ekran=kiracilar" }
+  ],
+  "icons": [
+    {
+      "src": "/icons/vedat-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vedat-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vedat-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

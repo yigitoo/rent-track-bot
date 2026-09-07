@@ -7,6 +7,16 @@ const dayjs = require('dayjs');
 const customParseFormat = require('dayjs/plugin/customParseFormat');
 dayjs.extend(customParseFormat);
 
+function mailFailureText(result) {
+  if (result.reason === 'no_recipients') {
+    return 'Mail gönderilemedi: alıcı tanımlı değil. Web panelinden Ayarlar > E-posta raporları bölümüne adres ekleyin.';
+  }
+  if (result.reason === 'not_configured') {
+    return 'Mail gönderilemedi: EMAIL_USER / EMAIL_PASS yapılandırılmamış.';
+  }
+  return 'Mail gönderilemedi: ' + (result.error || 'bilinmeyen hata');
+}
+
 module.exports = function registerMailCommands(bot) {
   bot.command('mailgonder', async (ctx) => {
     let month, year;
@@ -54,8 +64,10 @@ module.exports = function registerMailCommands(bot) {
     const subject = `Kira Raporu - ${formatMonthYear(month, year)}`;
 
     try {
-      await sendHtmlMail(subject, html);
-      await ctx.reply(`Mail gönderildi: ${process.env.EMAIL_TO}`);
+      const mail = await sendHtmlMail(subject, html);
+      await ctx.reply(mail.sent
+        ? `Mail gönderildi: ${mail.recipients.join(', ')}`
+        : mailFailureText(mail));
     } catch (err) {
       console.error('Mail error:', err);
       await ctx.reply(`Mail gönderilemedi: ${err.message}`);

@@ -3,6 +3,7 @@ const Tenant = require('../models/tenant');
 const { formatCurrency } = require('../utils/format');
 const { cancelKeyboard } = require('../utils/keyboard');
 const { normalizePaymentDay } = require('../utils/rentSchedule');
+const { notifyTenantCreated } = require('../services/notificationService');
 
 const addTenantWizard = new Scenes.WizardScene(
   'add_tenant_wizard',
@@ -51,6 +52,7 @@ const addTenantWizard = new Scenes.WizardScene(
       paymentDay,
     });
 
+    await notifyTenantCreated(tenant);
     await ctx.reply(
       `Kiracı eklendi:\n` +
       `  Ad: ${tenant.name}\n` +

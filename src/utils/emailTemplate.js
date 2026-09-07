@@ -2,6 +2,35 @@ const dayjs = require('dayjs');
 const { formatCurrency, formatDate, formatMonthYear, now } = require('./format');
 const { getMonthlyStatuses } = require('./rentSchedule');
 
+/* Vedat Gayrimenkul e-posta raporu.
+   Panelle aynı palet, ama posta istemcileri için: tablo düzeni, satır içi
+   stil, sabit hex renk. backdrop-filter, color-mix, flex ve grid yok;
+   Outlook ve Gmail bunların hiçbirini güvenilir biçimde çizmez.
+   Cam yüzeyin karşılığı burada yumuşak degrade ve ince kenar. */
+
+const C = {
+  ink: '#0c1220',
+  ink2: '#4a5771',
+  ink3: '#7b8aa4',
+  line: '#e4e8f0',
+  lineSoft: '#eef1f7',
+  page: '#eceff6',
+  card: '#ffffff',
+  panel: '#f7f9fc',
+  accent: '#2b54d4',
+  accentSoft: '#edf1fd',
+  ok: '#0f7a55',
+  okSoft: '#e4f4ee',
+  warn: '#a2660f',
+  warnSoft: '#fbf1e0',
+  bad: '#bd3a2c',
+  badSoft: '#fbe9e7',
+  calm: '#3d5a80',
+  calmSoft: '#ebeff6',
+};
+
+const FONT = "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -11,44 +40,77 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
-function statusLabel(item) {
-  if (item.paid) return { text: 'Ödendi', bg: '#dcfce7', color: '#166534' };
-  if (item.partial) return { text: 'Eksik', bg: '#fef3c7', color: '#92400e' };
-  if (item.daysUntilDue < 0) return { text: 'Gecikti', bg: '#fee2e2', color: '#991b1b' };
-  if (item.daysUntilDue <= 7) return { text: 'Yaklaşıyor', bg: '#dbeafe', color: '#1d4ed8' };
-  return { text: 'Ödenecek', bg: '#f1f5f9', color: '#334155' };
+function toneOf(item) {
+  if (item.paid) return { label: 'Ödendi', fg: C.ok, bg: C.okSoft };
+  if (item.partial) return { label: 'Eksik', fg: C.warn, bg: C.warnSoft };
+  if (item.daysUntilDue < 0) return { label: 'Gecikti', fg: C.bad, bg: C.badSoft };
+  if (item.daysUntilDue <= 7) return { label: 'Yaklaşıyor', fg: C.calm, bg: C.calmSoft };
+  return { label: 'Ödenecek', fg: C.ink2, bg: C.panel };
 }
 
-function buildBadge(item) {
-  const label = statusLabel(item);
-  return `<span style="display:inline-block;background:${label.bg};color:${label.color};padding:4px 9px;border-radius:999px;font-size:12px;font-weight:700;">${label.text}</span>`;
+function badge(item) {
+  const tone = toneOf(item);
+  return `<span style="display:inline-block;background:${tone.bg};color:${tone.fg};padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:-.005em;white-space:nowrap;">${tone.label}</span>`;
 }
 
 function sameMonth(date, month, year) {
-  const d = dayjs(date);
-  return d.month() + 1 === month && d.year() === year;
+  const value = dayjs(date);
+  return value.month() + 1 === month && value.year() === year;
+}
+
+/* Ölçüt kartı: rakam büyük, etiket küçük, sayılar tabular */
+function statCard({ value, label, fg, bg, border }) {
+  return `
+    <td class="stat-cell" width="25%" style="padding:5px;vertical-align:top;">
+      <div style="background:${bg};border:1px solid ${border};border-radius:16px;padding:14px 14px 13px;">
+        <div style="color:${fg};font-size:20px;font-weight:700;letter-spacing:-.03em;line-height:1.1;font-variant-numeric:tabular-nums;">${value}</div>
+        <div style="color:${C.ink3};font-size:10.5px;font-weight:600;margin-top:6px;letter-spacing:.07em;text-transform:uppercase;">${label}</div>
+      </div>
+    </td>`;
+}
+
+/* İlerleme çubuğu: tablo hücreleriyle, çünkü div genişliği Outlook'ta kayar */
+function progressBar(rate) {
+  const filled = Math.max(0, Math.min(100, Math.round(rate)));
+  const rest = 100 - filled;
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:separate;">
+      <tr>
+        <td style="padding:0;">
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;border-radius:999px;overflow:hidden;background:${C.line};">
+            <tr>
+              ${filled ? `<td width="${filled}%" style="height:8px;line-height:8px;font-size:0;background:${C.accent};">&nbsp;</td>` : ''}
+              ${rest ? `<td width="${rest}%" style="height:8px;line-height:8px;font-size:0;background:${C.line};">&nbsp;</td>` : ''}
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>`;
 }
 
 function buildCalendar(month, year, statuses) {
   const firstDay = dayjs().year(year).month(month - 1).date(1);
   const daysInMonth = firstDay.daysInMonth();
   const leadingDays = (firstDay.day() + 6) % 7;
+  const today = now();
+  const todayDay = today.month() + 1 === month && today.year() === year ? today.date() : 0;
   const eventMap = {};
+
+  function mark(day, key) {
+    if (!eventMap[day]) eventMap[day] = { paid: 0, upcoming: 0, pending: 0, overdue: 0 };
+    eventMap[day][key] += 1;
+  }
 
   for (const item of statuses) {
     if (item.paid && item.lastDate && sameMonth(item.lastDate, month, year)) {
-      const day = dayjs(item.lastDate).date();
-      if (!eventMap[day]) eventMap[day] = { paid: 0, upcoming: 0, pending: 0, overdue: 0 };
-      eventMap[day].paid += 1;
+      mark(dayjs(item.lastDate).date(), 'paid');
       continue;
     }
-
     if (!item.paid && sameMonth(item.dueDate, month, year)) {
       const day = dayjs(item.dueDate).date();
-      if (!eventMap[day]) eventMap[day] = { paid: 0, upcoming: 0, pending: 0, overdue: 0 };
-      if (item.daysUntilDue < 0) eventMap[day].overdue += 1;
-      else if (item.daysUntilDue <= 7) eventMap[day].upcoming += 1;
-      else eventMap[day].pending += 1;
+      if (item.daysUntilDue < 0) mark(day, 'overdue');
+      else if (item.daysUntilDue <= 7) mark(day, 'upcoming');
+      else mark(day, 'pending');
     }
   }
 
@@ -60,32 +122,42 @@ function buildCalendar(month, year, statuses) {
   const weeks = [];
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
-  const weekdays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-  const header = weekdays.map((day) =>
-    `<th style="padding:8px 4px;color:#64748b;font-size:11px;font-weight:700;text-align:center;">${day}</th>`
-  ).join('');
+  const header = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
+    .map((day) => `<th style="padding:0 0 8px;color:${C.ink3};font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:center;">${day}</th>`)
+    .join('');
 
-  const rows = weeks.map((week) => `
+  const dot = (color, count) =>
+    `<span style="display:inline-block;margin:3px 3px 0 0;width:16px;height:16px;line-height:16px;background:${color};color:#ffffff;border-radius:999px;font-size:9.5px;font-weight:700;text-align:center;">${count}</span>`;
+
+  const rows = weeks
+    .map(
+      (week) => `
     <tr>
-      ${week.map((day) => {
-        if (!day) return '<td style="padding:4px;"><div style="height:62px;background:#f8fafc;border:1px solid #eef2f7;border-radius:8px;"></div></td>';
-        const events = eventMap[day] || {};
-        const chips = [
-          events.paid ? `<span style="display:inline-block;margin:2px 2px 0 0;background:#16a34a;color:#fff;border-radius:999px;padding:2px 6px;font-size:10px;font-weight:700;">${events.paid}</span>` : '',
-          events.upcoming ? `<span style="display:inline-block;margin:2px 2px 0 0;background:#2563eb;color:#fff;border-radius:999px;padding:2px 6px;font-size:10px;font-weight:700;">${events.upcoming}</span>` : '',
-          events.pending ? `<span style="display:inline-block;margin:2px 2px 0 0;background:#94a3b8;color:#fff;border-radius:999px;padding:2px 6px;font-size:10px;font-weight:700;">${events.pending}</span>` : '',
-          events.overdue ? `<span style="display:inline-block;margin:2px 2px 0 0;background:#dc2626;color:#fff;border-radius:999px;padding:2px 6px;font-size:10px;font-weight:700;">${events.overdue}</span>` : '',
-        ].join('');
-        return `
-          <td style="padding:4px;vertical-align:top;">
-            <div style="height:62px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:7px;box-sizing:border-box;">
-              <div style="font-size:12px;font-weight:700;color:#0f172a;">${day}</div>
-              <div style="line-height:1.1;">${chips}</div>
+      ${week
+        .map((day) => {
+          if (!day) {
+            return `<td style="padding:3px;"><div style="height:58px;border:1px solid transparent;border-radius:12px;"></div></td>`;
+          }
+          const events = eventMap[day] || {};
+          const isToday = day === todayDay;
+          const chips = [
+            events.paid ? dot(C.ok, events.paid) : '',
+            events.upcoming ? dot(C.calm, events.upcoming) : '',
+            events.pending ? dot(C.ink3, events.pending) : '',
+            events.overdue ? dot(C.bad, events.overdue) : '',
+          ].join('');
+          return `
+          <td style="padding:3px;vertical-align:top;">
+            <div style="height:58px;background:${isToday ? C.accentSoft : C.card};border:1px solid ${isToday ? C.accent : C.line};border-radius:12px;padding:7px 8px;box-sizing:border-box;">
+              <div style="font-size:11.5px;font-weight:700;color:${isToday ? C.accent : C.ink};font-variant-numeric:tabular-nums;letter-spacing:-.01em;">${day}</div>
+              <div style="line-height:1;">${chips}</div>
             </div>
           </td>`;
-      }).join('')}
+        })
+        .join('')}
     </tr>`
-  ).join('');
+    )
+    .join('');
 
   return `
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:separate;border-spacing:0;">
@@ -95,47 +167,60 @@ function buildCalendar(month, year, statuses) {
 }
 
 function buildRows(statuses) {
-  return statuses.map((item) => {
-    const dueMeta = item.isDeferred
-      ? `<div style="color:#92400e;font-size:12px;margin-top:4px;">Ertelendi${item.defermentNote ? `: ${escapeHtml(item.defermentNote)}` : ''}</div>`
-      : '';
-    const paidMeta = item.lastDate ? `<div style="color:#64748b;font-size:12px;margin-top:4px;">Ödeme: ${formatDate(item.lastDate)}</div>` : '';
+  if (!statuses.length) {
+    return `<tr><td colspan="4" style="padding:26px 18px;text-align:center;color:${C.ink3};font-size:13px;">Bu dönemde kayıtlı kiracı yok.</td></tr>`;
+  }
 
-    return `
+  return statuses
+    .map((item, index) => {
+      const deferred = item.isDeferred
+        ? `<div style="color:${C.warn};font-size:11.5px;margin-top:4px;">Ertelendi${item.defermentNote ? ': ' + escapeHtml(item.defermentNote) : ''}</div>`
+        : '';
+      const lastPaid = item.lastDate
+        ? `<div style="color:${C.ink3};font-size:11.5px;margin-top:4px;">Tahsilat: ${formatDate(item.lastDate)}</div>`
+        : '';
+      const border = index === statuses.length - 1 ? 'none' : '1px solid ' + C.lineSoft;
+
+      return `
       <tr>
-        <td class="stack-cell" style="padding:14px 16px;border-bottom:1px solid #e2e8f0;vertical-align:top;">
-          <div style="font-weight:800;color:#0f172a;">${escapeHtml(item.tenant.name)}</div>
-          <div style="color:#64748b;font-size:12px;margin-top:4px;">${escapeHtml(item.tenant.address)}</div>
+        <td class="stack-cell" style="padding:14px 18px;border-bottom:${border};vertical-align:top;">
+          <div style="font-weight:700;color:${C.ink};font-size:14px;letter-spacing:-.015em;">${escapeHtml(item.tenant.name)}</div>
+          <div style="color:${C.ink3};font-size:11.5px;margin-top:3px;">${escapeHtml(item.tenant.address)}</div>
         </td>
-        <td class="stack-cell" style="padding:14px 16px;border-bottom:1px solid #e2e8f0;vertical-align:top;color:#334155;">
-          <div style="font-weight:700;">${formatDate(item.dueDate)}</div>
-          ${dueMeta}
+        <td class="stack-cell" style="padding:14px 18px;border-bottom:${border};vertical-align:top;color:${C.ink2};">
+          <div style="font-weight:600;font-size:13px;font-variant-numeric:tabular-nums;">${formatDate(item.dueDate)}</div>
+          ${deferred}
         </td>
-        <td class="stack-cell amount-cell" style="padding:14px 16px;border-bottom:1px solid #e2e8f0;vertical-align:top;text-align:right;">
-          <div style="font-weight:800;color:#0f172a;">${formatCurrency(item.expected)}</div>
-          <div style="color:#64748b;font-size:12px;margin-top:4px;">Kalan: ${formatCurrency(item.remaining)}</div>
-          ${paidMeta}
+        <td class="stack-cell amount-cell" style="padding:14px 18px;border-bottom:${border};vertical-align:top;text-align:right;">
+          <div style="font-weight:700;color:${C.ink};font-size:14px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;">${formatCurrency(item.expected)}</div>
+          ${item.remaining > 0 ? `<div style="color:${C.warn};font-size:11.5px;margin-top:3px;font-variant-numeric:tabular-nums;">Kalan: ${formatCurrency(item.remaining)}</div>` : ''}
+          ${lastPaid}
         </td>
-        <td class="stack-cell status-cell" style="padding:14px 16px;border-bottom:1px solid #e2e8f0;vertical-align:top;text-align:center;">${buildBadge(item)}</td>
+        <td class="stack-cell status-cell" style="padding:14px 18px;border-bottom:${border};vertical-align:top;text-align:right;">${badge(item)}</td>
       </tr>`;
-  }).join('');
+    })
+    .join('');
 }
 
-function buildMiniList(title, items, emptyText) {
+function miniList(title, items, emptyText, accent) {
   const rows = items.length
-    ? items.map((item) => `
+    ? items
+        .map(
+          (item, index) => `
       <tr>
-        <td style="padding:8px 0;border-bottom:1px solid #eef2f7;">
-          <div style="font-size:13px;font-weight:800;color:#0f172a;">${escapeHtml(item.tenant.name)}</div>
-          <div style="font-size:12px;color:#64748b;">${formatDate(item.dueDate)} · ${formatCurrency(item.remaining)}</div>
+        <td style="padding:9px 0;border-bottom:${index === items.length - 1 ? 'none' : '1px solid ' + C.lineSoft};">
+          <div style="font-size:12.5px;font-weight:700;color:${C.ink};letter-spacing:-.012em;">${escapeHtml(item.tenant.name)}</div>
+          <div style="font-size:11.5px;color:${C.ink3};margin-top:2px;font-variant-numeric:tabular-nums;">${formatDate(item.dueDate)} · ${formatCurrency(item.paid ? item.totalPaid : item.remaining)}</div>
         </td>
-      </tr>`).join('')
-    : `<tr><td style="padding:8px 0;color:#94a3b8;font-size:13px;">${emptyText}</td></tr>`;
+      </tr>`
+        )
+        .join('')
+    : `<tr><td style="padding:9px 0;color:${C.ink3};font-size:12px;">${emptyText}</td></tr>`;
 
   return `
-    <td class="summary-column" width="33.33%" style="padding:0 8px;vertical-align:top;">
-      <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;background:#fff;">
-        <div style="font-size:13px;font-weight:900;color:#0f172a;margin-bottom:6px;">${title}</div>
+    <td class="summary-column" width="33.33%" style="padding:0 5px;vertical-align:top;">
+      <div style="border:1px solid ${C.line};border-radius:16px;padding:14px 16px;background:${C.card};">
+        <div style="font-size:11px;font-weight:700;color:${accent};margin-bottom:4px;letter-spacing:.07em;text-transform:uppercase;">${title}</div>
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation">${rows}</table>
       </div>
     </td>`;
@@ -148,109 +233,139 @@ function buildReportHtml({ month, year, tenants, paymentsByTenant, totalExpected
   const overdueList = unpaidList.filter((item) => item.daysUntilDue < 0);
   const upcomingList = unpaidList.filter((item) => item.daysUntilDue >= 0 && item.daysUntilDue <= 7);
   const pendingList = unpaidList.filter((item) => item.daysUntilDue > 7);
-  const collectionRate = tenants.length > 0 ? Math.round((paidList.length / tenants.length) * 100) : 0;
-  const outstanding = Math.max(totalExpected - totalReceived, 0);
-  const generatedAt = formatDate(now().toDate());
 
-  return `
-<!DOCTYPE html>
+  const collectionRate = totalExpected ? Math.min(Math.round((totalReceived / totalExpected) * 100), 100) : 0;
+  const outstanding = Math.max(totalExpected - totalReceived, 0);
+  const period = formatMonthYear(month, year);
+  const generatedAt = formatDate(now().toDate());
+  const panelUrl = process.env.PUBLIC_APP_URL || '';
+
+  const headline = overdueList.length
+    ? `${overdueList.length} kiracının ödemesi gecikti.`
+    : upcomingList.length
+      ? `${upcomingList.length} ödeme bu hafta içinde.`
+      : outstanding > 0
+        ? `Açık bakiye ${formatCurrency(outstanding)}.`
+        : 'Bu dönemde açık bakiye kalmadı.';
+
+  return `<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>Vedat Gayrimenkul · ${period}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <style>
+    a { text-decoration: none; }
     @media only screen and (max-width: 620px) {
       .container { width: 100% !important; padding: 12px !important; }
-      .panel { border-radius: 14px !important; }
-      .header { padding: 24px 18px !important; }
-      .stat-cell, .summary-column { display: block !important; width: 100% !important; box-sizing: border-box !important; padding: 6px 0 !important; }
+      .header { padding: 26px 20px !important; }
+      .pad { padding-left: 18px !important; padding-right: 18px !important; }
+      .stat-cell, .summary-column {
+        display: block !important; width: 100% !important;
+        box-sizing: border-box !important; padding: 5px 0 !important;
+      }
       .tenant-table thead { display: none !important; }
-      .tenant-table tr { display: block !important; border-bottom: 1px solid #e2e8f0 !important; padding: 10px 0 !important; }
-      .tenant-table td { display: block !important; border-bottom: 0 !important; padding: 5px 16px !important; text-align: left !important; }
+      .tenant-table tr { display: block !important; border-bottom: 1px solid ${C.line} !important; padding: 8px 0 !important; }
+      .tenant-table td { display: block !important; border-bottom: 0 !important; padding: 4px 18px !important; text-align: left !important; }
       .amount-cell, .status-cell { text-align: left !important; }
+      .cal-wrap { padding: 8px !important; }
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background:#e5e7eb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#0f172a;">
-  <div class="container" style="max-width:760px;margin:0 auto;padding:24px 16px;">
-    <div class="panel" style="background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,0.10);">
-      <div class="header" style="background:#0f172a;padding:30px 32px;">
-        <div style="color:#bfdbfe;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Kira Takip Raporu</div>
-        <h1 style="margin:8px 0 0;color:#fff;font-size:26px;line-height:1.2;font-weight:900;">${formatMonthYear(month, year)}</h1>
-        <p style="margin:8px 0 0;color:#cbd5e1;font-size:14px;">Oluşturma tarihi: ${generatedAt}</p>
+<body style="margin:0;padding:0;background:${C.page};font-family:${FONT};color:${C.ink};-webkit-font-smoothing:antialiased;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${period} kira özeti · ${headline}</div>
+
+  <div class="container" style="max-width:720px;margin:0 auto;padding:26px 16px 32px;">
+    <div style="background:${C.card};border-radius:24px;overflow:hidden;border:1px solid ${C.line};box-shadow:0 22px 60px -30px rgba(12,18,32,.45);">
+
+      <!-- Başlık -->
+      <div class="header" style="background:${C.ink};background-image:linear-gradient(135deg,#16224a 0%,#0c1220 52%,#1d2f6b 100%);padding:32px 34px;">
+        <div style="color:#93a8e8;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;">Vedat Gayrimenkul · aylık rapor</div>
+        <h1 style="margin:10px 0 0;color:#ffffff;font-size:27px;line-height:1.1;font-weight:700;letter-spacing:-.03em;">${period}</h1>
+        <p style="margin:10px 0 0;color:#c3cfef;font-size:13.5px;line-height:1.5;">${headline}</p>
+        <p style="margin:14px 0 0;color:#8496c4;font-size:11.5px;">Oluşturma: ${generatedAt}</p>
       </div>
 
-      <div style="padding:22px 24px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+      <!-- Ölçütler -->
+      <div class="pad" style="padding:22px 24px 18px;background:${C.panel};border-bottom:1px solid ${C.line};">
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
           <tr>
-            <td class="stat-cell" width="25%" style="padding:6px;">
-              <div style="background:#ecfdf5;border:1px solid #bbf7d0;border-radius:12px;padding:14px;">
-                <div style="color:#166534;font-size:21px;font-weight:900;">${formatCurrency(totalReceived)}</div>
-                <div style="color:#15803d;font-size:11px;font-weight:800;margin-top:4px;text-transform:uppercase;">Toplanan</div>
-              </div>
-            </td>
-            <td class="stat-cell" width="25%" style="padding:6px;">
-              <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:14px;">
-                <div style="color:#c2410c;font-size:21px;font-weight:900;">${formatCurrency(outstanding)}</div>
-                <div style="color:#9a3412;font-size:11px;font-weight:800;margin-top:4px;text-transform:uppercase;">Kalan</div>
-              </div>
-            </td>
-            <td class="stat-cell" width="25%" style="padding:6px;">
-              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;">
-                <div style="color:#1d4ed8;font-size:21px;font-weight:900;">${formatCurrency(totalExpected)}</div>
-                <div style="color:#1e40af;font-size:11px;font-weight:800;margin-top:4px;text-transform:uppercase;">Beklenen</div>
-              </div>
-            </td>
-            <td class="stat-cell" width="25%" style="padding:6px;">
-              <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:12px;padding:14px;">
-                <div style="color:#334155;font-size:21px;font-weight:900;">${collectionRate}%</div>
-                <div style="color:#475569;font-size:11px;font-weight:800;margin-top:4px;text-transform:uppercase;">Tahsilat</div>
-              </div>
-            </td>
+            ${statCard({ value: formatCurrency(totalReceived), label: 'Tahsil edilen', fg: C.ok, bg: C.okSoft, border: '#cbe8db' })}
+            ${statCard({ value: formatCurrency(outstanding), label: 'Açık bakiye', fg: C.warn, bg: C.warnSoft, border: '#f0dcb6' })}
+            ${statCard({ value: formatCurrency(totalExpected), label: 'Beklenen', fg: C.accent, bg: C.accentSoft, border: '#ccd8fa' })}
+            ${statCard({ value: collectionRate + '%', label: 'Tahsilat', fg: C.ink, bg: C.card, border: C.line })}
           </tr>
         </table>
+        <div style="margin-top:14px;">
+          ${progressBar(collectionRate)}
+          <div style="margin-top:8px;color:${C.ink3};font-size:11.5px;font-variant-numeric:tabular-nums;">
+            ${paidList.length} / ${statuses.length} kiracı dönemi tamamladı
+          </div>
+        </div>
       </div>
 
-      <div style="padding:24px;">
-        <h2 style="margin:0 0 14px;font-size:17px;font-weight:900;color:#0f172a;">Aylık Takvim</h2>
-        <div style="border:1px solid #e2e8f0;border-radius:14px;padding:10px;background:#f8fafc;">
+      <!-- Takvim -->
+      <div class="pad" style="padding:24px;">
+        <h2 style="margin:0 0 4px;font-size:15px;font-weight:700;color:${C.ink};letter-spacing:-.02em;">Aylık takvim</h2>
+        <p style="margin:0 0 14px;color:${C.ink3};font-size:12px;">Ödenen günler ve son ödeme tarihleri.</p>
+        <div class="cal-wrap" style="border:1px solid ${C.line};border-radius:18px;padding:12px;background:${C.panel};">
           ${buildCalendar(month, year, statuses)}
         </div>
-        <div style="margin-top:10px;color:#64748b;font-size:12px;">
-          <span style="color:#16a34a;font-weight:800;">Yeşil</span>: ödendi ·
-          <span style="color:#2563eb;font-weight:800;">Mavi</span>: yaklaşıyor ·
-          <span style="color:#64748b;font-weight:800;">Gri</span>: ödenecek ·
-          <span style="color:#dc2626;font-weight:800;">Kırmızı</span>: gecikti
+        <div style="margin-top:12px;color:${C.ink3};font-size:11.5px;line-height:1.9;">
+          <span style="display:inline-block;width:9px;height:9px;border-radius:999px;background:${C.ok};margin-right:5px;"></span>Ödendi
+          <span style="display:inline-block;width:9px;height:9px;border-radius:999px;background:${C.calm};margin:0 5px 0 14px;"></span>Yaklaşıyor
+          <span style="display:inline-block;width:9px;height:9px;border-radius:999px;background:${C.ink3};margin:0 5px 0 14px;"></span>Ödenecek
+          <span style="display:inline-block;width:9px;height:9px;border-radius:999px;background:${C.bad};margin:0 5px 0 14px;"></span>Gecikti
         </div>
       </div>
 
-      <div style="padding:0 16px 24px;">
+      <!-- Üç kısa liste -->
+      <div class="pad" style="padding:0 19px 24px;">
         <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
           <tr>
-            ${buildMiniList('Ödendi', paidList.slice(0, 5), 'Bu ay ödeme yok.')}
-            ${buildMiniList('Yaklaşan', upcomingList.slice(0, 5), '7 gün içinde ödeme yok.')}
-            ${buildMiniList('Bekleyen', [...overdueList, ...pendingList].slice(0, 5), 'Bekleyen ödeme yok.')}
+            ${miniList('Tamamlandı', paidList.slice(0, 5), 'Bu ay tahsilat yok.', C.ok)}
+            ${miniList('Bu hafta', upcomingList.slice(0, 5), '7 gün içinde ödeme yok.', C.calm)}
+            ${miniList('Bekleyen', [...overdueList, ...pendingList].slice(0, 5), 'Bekleyen ödeme yok.', C.bad)}
           </tr>
         </table>
       </div>
 
-      <div style="padding:0 24px 28px;">
-        <h2 style="margin:0 0 12px;font-size:17px;font-weight:900;color:#0f172a;">Kiracı Detayları</h2>
-        <table class="tenant-table" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;font-size:14px;border-collapse:separate;border-spacing:0;">
+      <!-- Kiracı tablosu -->
+      <div class="pad" style="padding:0 24px 26px;">
+        <h2 style="margin:0 0 12px;font-size:15px;font-weight:700;color:${C.ink};letter-spacing:-.02em;">Kiracı detayları</h2>
+        <table class="tenant-table" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.line};border-radius:18px;overflow:hidden;border-collapse:separate;border-spacing:0;background:${C.card};">
           <thead>
-            <tr style="background:#f8fafc;">
-              <th style="padding:11px 16px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Kiracı</th>
-              <th style="padding:11px 16px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Son Ödeme</th>
-              <th style="padding:11px 16px;text-align:right;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Tutar</th>
-              <th style="padding:11px 16px;text-align:center;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Durum</th>
+            <tr style="background:${C.panel};">
+              <th style="padding:11px 18px;text-align:left;color:${C.ink3};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Kiracı</th>
+              <th style="padding:11px 18px;text-align:left;color:${C.ink3};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Son ödeme</th>
+              <th style="padding:11px 18px;text-align:right;color:${C.ink3};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Tutar</th>
+              <th style="padding:11px 18px;text-align:right;color:${C.ink3};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Durum</th>
             </tr>
           </thead>
           <tbody>${buildRows(statuses)}</tbody>
         </table>
       </div>
+
+      ${panelUrl ? `
+      <!-- Panele geçiş -->
+      <div class="pad" style="padding:0 24px 30px;">
+        <table cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td style="background:${C.accent};border-radius:14px;">
+              <a href="${escapeHtml(panelUrl)}" style="display:inline-block;padding:13px 24px;color:#ffffff;font-size:13.5px;font-weight:600;letter-spacing:-.008em;">Paneli aç</a>
+            </td>
+          </tr>
+        </table>
+      </div>` : ''}
     </div>
 
-    <div style="text-align:center;padding:18px 0 6px;color:#94a3b8;font-size:12px;">Kira Takip Botu tarafından otomatik oluşturuldu</div>
+    <p style="text-align:center;padding:18px 12px 0;margin:0;color:${C.ink3};font-size:11.5px;line-height:1.6;">
+      Vedat Gayrimenkul paneli tarafından otomatik oluşturuldu.<br>
+      Telegram botu ve panel aynı kayıtlara bakar.
+    </p>
   </div>
 </body>
 </html>`;
