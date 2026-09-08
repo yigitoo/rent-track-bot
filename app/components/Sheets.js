@@ -13,9 +13,11 @@ import {
   apiRequest,
   formatCurrency,
   formatDate,
+  parseMoney,
   periodLabel,
   toDateInput,
 } from "../lib/client";
+import MoneyField from "./MoneyField";
 
 function FormError({ message }) {
   if (!message) return null;
@@ -107,9 +109,16 @@ export function TenantSheet({ mode, tenant, token, onClose, onSaved }) {
     deposit: tenant?.deposit || "",
     increaseRate: tenant?.increaseRate || "",
     notes: tenant?.notes || "",
+    rentMode: "raise",
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  /* Tutar değiştiyse niyeti sormak gerekiyor: zam mı, yanlış girilmiş bir
+     tutarın düzeltmesi mi? İkisi geçmiş dönemleri farklı etkiliyor. */
+  const yeniKira = parseMoney(form.rentAmount);
+  const kiraDegisti =
+    mode === "edit" && Number.isFinite(yeniKira) && yeniKira !== Number(tenant?.rentAmount);
 
   function update(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -123,7 +132,15 @@ export function TenantSheet({ mode, tenant, token, onClose, onSaved }) {
       const method = mode === "edit" ? "PATCH" : "POST";
       const url = mode === "edit" ? "/api/tenants?id=" + tenant.id : "/api/tenants";
       await apiRequest(url, { method, body: JSON.stringify(form) }, token);
-      await onSaved(mode === "edit" ? "Kiracı bilgileri güncellendi." : "Yeni kiracı eklendi.");
+      await onSaved(
+        mode !== "edit"
+          ? "Yeni kiracı eklendi."
+          : kiraDegisti && form.rentMode === "correction"
+            ? "Kira tutarı düzeltildi, geçmiş aylar da güncellendi."
+            : kiraDegisti
+              ? "Zam kaydedildi, bu aydan itibaren geçerli."
+              : "Kiracı bilgileri güncellendi."
+      );
     } catch (requestError) {
       setError(requestError.message);
       setBusy(false);
@@ -160,10 +177,15 @@ export function TenantSheet({ mode, tenant, token, onClose, onSaved }) {
 
         <p className="form-section">Kira ve sözleşme</p>
         <div className="form-grid">
-          <div className="field">
-            <label htmlFor="tenant-rent">Aylık kira (TL)</label>
-            <input id="tenant-rent" type="number" inputMode="decimal" min="1" step="0.01" value={form.rentAmount} onChange={(e) => update("rentAmount", e.target.value)} required />
-          </div>
+          <MoneyField
+            id="tenant-rent"
+            label="Aylık kira"
+            kind="rent"
+            required
+            value={form.rentAmount}
+            onChange={(v) => update("rentAmount", v)}
+            hint="Binlik ayracı nokta: 45.000"
+          />
           <div className="field">
             <label htmlFor="tenant-day">Ödeme günü</label>
             <input id="tenant-day" type="number" inputMode="numeric" min="1" max="31" value={form.paymentDay} onChange={(e) => update("paymentDay", e.target.value)} required />
@@ -176,15 +198,50 @@ export function TenantSheet({ mode, tenant, token, onClose, onSaved }) {
             <label htmlFor="tenant-end">Sözleşme bitişi</label>
             <input id="tenant-end" type="date" value={form.contractEnd} onChange={(e) => update("contractEnd", e.target.value)} />
           </div>
-          <div className="field">
-            <label htmlFor="tenant-deposit">Depozito (TL)</label>
-            <input id="tenant-deposit" type="number" inputMode="decimal" min="0" step="0.01" value={form.deposit} onChange={(e) => update("deposit", e.target.value)} placeholder="0" />
-          </div>
+          <MoneyField
+            id="tenant-deposit"
+            label="Depozito"
+            kind="deposit"
+            optional
+            value={form.deposit}
+            onChange={(v) => update("deposit", v)}
+          />
           <div className="field">
             <label htmlFor="tenant-rate">Yıllık artış oranı (%)</label>
             <input id="tenant-rate" type="number" inputMode="decimal" min="0" max="200" step="0.1" value={form.increaseRate} onChange={(e) => update("increaseRate", e.target.value)} placeholder="0" />
             <span className="field-hint">Zam zamanı geldiğinde önerilecek oran.</span>
           </div>
+          {kiraDegisti ? (
+            <div className="field span-2 rent-mode">
+              <span className="rent-mode-title">
+                Kira {formatCurrency(tenant.rentAmount)} → {formatCurrency(yeniKira)} olarak değişiyor
+              </span>
+              <label className={"rent-mode-option" + (form.rentMode === "raise" ? " is-active" : "")}>
+                <input
+                  type="radio"
+                  name="rent-mode"
+                  checked={form.rentMode === "raise"}
+                  onChange={() => update("rentMode", "raise")}
+                />
+                <span>
+                  <strong>Zam yapıldı</strong>
+                  <small>Bugünden itibaren geçerli. Geçmiş aylar eski tutarıyla kalır.</small>
+                </span>
+              </label>
+              <label className={"rent-mode-option" + (form.rentMode === "correction" ? " is-active" : "")}>
+                <input
+                  type="radio"
+                  name="rent-mode"
+                  checked={form.rentMode === "correction"}
+                  onChange={() => update("rentMode", "correction")}
+                />
+                <span>
+                  <strong>Yanlış girilmişti, düzeltiyorum</strong>
+                  <small>Tutar baştan beri buydu. Kira geçmişi sıfırlanır, tüm aylar bu tutara çekilir.</small>
+                </span>
+              </label>
+            </div>
+          ) : null}
           <div className="field span-2">
             <label htmlFor="tenant-notes">Not <span>(isteğe bağlı)</span></label>
             <textarea id="tenant-notes" rows={3} value={form.notes} onChange={(e) => update("notes", e.target.value)} maxLength={1000} placeholder="Sözleşme maddesi, demirbaş, iletişim tercihi…" />
@@ -248,10 +305,14 @@ export function PaymentSheet({ tenantId, tenants, period, date, token, onClose, 
               {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
             </select>
           </div>
-          <div className="field">
-            <label htmlFor="payment-amount">Tutar (TL)</label>
-            <input id="payment-amount" type="number" inputMode="decimal" min="1" step="0.01" value={form.amount} onChange={(e) => update("amount", e.target.value)} required />
-          </div>
+          <MoneyField
+            id="payment-amount"
+            label="Tutar"
+            kind="payment"
+            required
+            value={form.amount}
+            onChange={(v) => update("amount", v)}
+          />
           <div className="field">
             <label htmlFor="payment-date">Ödeme tarihi</label>
             <input id="payment-date" type="date" value={form.date} onChange={(e) => update("date", e.target.value)} required />
@@ -328,7 +389,7 @@ export function ExpenseSheet({ tenants, categories, period, date, token, onClose
           </div>
           <div className="field">
             <label htmlFor="expense-amount">Tutar (TL)</label>
-            <input id="expense-amount" type="number" inputMode="decimal" min="1" step="0.01" value={form.amount} onChange={(e) => update("amount", e.target.value)} required />
+            <input id="expense-amount" type="text" inputMode="decimal" value={form.amount} onChange={(e) => update("amount", e.target.value)} required />
           </div>
           <div className="field">
             <label htmlFor="expense-date">Tarih</label>
@@ -651,19 +712,15 @@ export function TenantDetailSheet({ tenant, token, onClose, onChanged }) {
                 onChange={(e) => setRaise({ ...raise, rate: e.target.value, amount: "" })}
               />
             </div>
-            <div className="field">
-              <label htmlFor="raise-amount">Yeni tutar (TL)</label>
-              <input
-                id="raise-amount"
-                type="number"
-                inputMode="decimal"
-                min="1"
-                step="0.01"
-                value={raise.amount}
-                onChange={(e) => setRaise({ ...raise, amount: e.target.value })}
-                placeholder={preview ? String(preview) : ""}
-              />
-            </div>
+            <MoneyField
+              id="raise-amount"
+              label="Yeni tutar"
+              kind="rent"
+              optional
+              value={raise.amount}
+              onChange={(v) => setRaise({ ...raise, amount: v })}
+              hint={preview ? "Orandan hesaplanan: " + formatCurrency(preview) : "Boş bırakırsanız orandan hesaplanır"}
+            />
             <div className="field">
               <label htmlFor="raise-date">Geçerlilik tarihi</label>
               <input id="raise-date" type="date" value={raise.effectiveFrom} onChange={(e) => setRaise({ ...raise, effectiveFrom: e.target.value })} required />
@@ -791,10 +848,14 @@ export function RecurrenceSheet({
               </select>
             </div>
           )}
-          <div className="field">
-            <label htmlFor="rec-amount">Tutar (TL)</label>
-            <input id="rec-amount" type="number" inputMode="decimal" min="1" step="0.01" value={form.amount} onChange={(e) => update("amount", e.target.value)} required />
-          </div>
+          <MoneyField
+            id="rec-amount"
+            label="Tutar"
+            kind={lockCategory === "aidat" || form.category === "aidat" ? "due" : "expense"}
+            required
+            value={form.amount}
+            onChange={(v) => update("amount", v)}
+          />
           <div className="field">
             <label htmlFor="rec-day">Ayın günü</label>
             <input id="rec-day" type="number" inputMode="numeric" min="1" max="31" value={form.dayOfMonth} onChange={(e) => update("dayOfMonth", e.target.value)} required />

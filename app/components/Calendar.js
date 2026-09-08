@@ -120,11 +120,14 @@ export default function CalendarBoard({
     });
   }, [period.month, period.year]);
 
+  /* Yalnız dönem değişince seçim sıfırlanır. Bağımlılığa events girerse
+     her veri tazelemesinde (ödeme işaretleme, yenileme) seçili gün başa
+     dönüyordu; kullanıcı baktığı günü kaybediyordu. */
   useEffect(() => {
     const today = new Date();
     const isCurrent = today.getFullYear() === period.year && today.getMonth() + 1 === period.month;
-    setSelectedDay(isCurrent ? today.getDate() : events[0]?.day || 1);
-  }, [period.month, period.year, events]);
+    setSelectedDay(isCurrent ? today.getDate() : 1);
+  }, [period.month, period.year]);
 
   const today = new Date();
   const todayDay =

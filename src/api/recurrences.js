@@ -8,20 +8,19 @@ const Tenant = require('../models/tenant');
 const { requireWebAuth } = require('../utils/webAuth');
 const { materializeDue, serializeRecurrence } = require('../services/recurrence');
 const { categoryLabel } = require('../utils/categories');
+const { requireMoney } = require('../utils/money');
 
 function parseInput(body = {}) {
   const title = String(body.title || '').trim();
   if (!title || title.length > 120) throw new Error('Başlık 1-120 karakter olmalı.');
 
-  const amount = Number(String(body.amount ?? '').replace(',', '.'));
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error('Tutar pozitif olmalı.');
+  const category = Expense.CATEGORIES.includes(body.category) ? body.category : 'aidat';
+  const amount = requireMoney(body.amount, category === 'aidat' ? 'due' : 'expense');
 
   const dayOfMonth = Number(body.dayOfMonth);
   if (!Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31) {
     throw new Error('Ayın günü 1-31 arasında olmalı.');
   }
-
-  const category = Expense.CATEGORIES.includes(body.category) ? body.category : 'aidat';
 
   const startDate = body.startDate ? new Date(body.startDate) : new Date();
   if (Number.isNaN(startDate.getTime())) throw new Error('Geçersiz başlangıç tarihi.');
@@ -103,14 +102,32 @@ module.exports = async (req, res) => {
         tenant = await Tenant.findById(tenantId);
         if (!tenant) return res.status(404).json({ error: 'Kiracı bulunamadı.' });
       }
+      const oncekiTutar = recurrence.amount;
       Object.assign(recurrence, input, { tenant: tenant?._id || null });
       await recurrence.save();
+
+      /* Yansıma: kalem güncellenince günü gelmiş ama henüz ödenmemiş
+         yükümlülükler de yeni tutara çekilir. Ödenmiş kayıtlara dokunulmaz,
+         onlar gerçekleşmiş harcamadır. */
+      let esitlenen = 0;
+      if (input.amount !== oncekiTutar || input.title !== recurrence.title) {
+        const sonuc = await Expense.updateMany(
+          { recurrence: recurrence._id, paid: false },
+          { $set: { amount: input.amount, title: input.title, category: input.category, tenant: tenant?._id || null } }
+        );
+        esitlenen = sonuc.modifiedCount || 0;
+      }
+
       const updated = await recurrence.populate('tenant', 'name');
-      return res.status(200).json({ recurrence: serializeRecurrence(updated) });
+      return res.status(200).json({ recurrence: serializeRecurrence(updated), esitlenen });
     }
 
+    /* Kalem silinince ödenmemiş yükümlülükleri de gider; ödenmiş kayıtlar
+       defterde kalır ama artık boşa referans tutmasın diye kopar. */
+    const silinen = await Expense.deleteMany({ recurrence: recurrence._id, paid: false });
+    await Expense.updateMany({ recurrence: recurrence._id }, { $set: { recurrence: null } });
     await recurrence.deleteOne();
-    return res.status(200).json({ ok: true, id });
+    return res.status(200).json({ ok: true, id, silinenYukumluluk: silinen.deletedCount || 0 });
   } catch (error) {
     console.error('Recurrences API error:', error);
     const status = /olmalı|Geçersiz|olamaz/.test(error.message || '') ? 400 : 500;

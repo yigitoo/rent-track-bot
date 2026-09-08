@@ -11,7 +11,7 @@ import {
   Plus,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { downloadCsv, formatCurrency, formatDate, initials } from "../lib/client";
+import { downloadCsv, formatCurrency, formatDate, formatMoneyShort, initials } from "../lib/client";
 
 const MONTH_LONG = [
   "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
@@ -30,15 +30,13 @@ const CELL = {
   outside: { label: "Sözleşme öncesi", glyph: Minus },
 };
 
-const COMPACT = new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 });
-
 function cellTitle(row, cell) {
   const period = MONTH_LONG[cell.month - 1];
   const state = CELL[cell.status]?.label || "Ödenecek";
   const money = cell.status === "paid" || cell.status === "partial"
     ? formatCurrency(cell.paid) + " tahsil edildi"
     : formatCurrency(cell.expected) + " bekleniyor";
-  const tail = cell.paid > 0 ? "Kaldırmak için dokunun." : "Ödendi olarak işaretlemek için dokunun.";
+  const tail = cell.paid > 0 ? "Tutarı düzeltmek için dokunun." : "Ödendi olarak işaretlemek için dokunun.";
   return `${row.name} · ${period} · ${state} · ${money}. ${tail}`;
 }
 
@@ -114,7 +112,7 @@ export default function PaymentGrid({
         <span className="pg-key state-partial"><WarningCircle weight="fill" />Eksik</span>
         <span className="pg-key state-overdue"><WarningCircle weight="fill" />Gecikti</span>
         <span className="pg-key state-pending"><Clock weight="fill" />Bekliyor</span>
-        <span className="pg-hint">Bir aya dokunun: kira ödendi olarak işaretlenir.</span>
+        <span className="pg-hint">Boş aya dokunun: ödendi işaretlenir. Dolu aya dokunun: tutarı düzeltin.</span>
       </div>
 
       {grid.rows.length ? (
@@ -188,7 +186,7 @@ export default function PaymentGrid({
                         <Glyph weight={checked ? "fill" : "bold"} className="pg-cell-glyph" />
                       </span>
                       <span className="pg-cell-amount num">
-                        {COMPACT.format(cell.paid > 0 ? cell.paid : cell.expected)}
+                        {formatMoneyShort(cell.paid > 0 ? cell.paid : cell.expected)}
                       </span>
                     </button>
                   );

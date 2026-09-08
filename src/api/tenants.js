@@ -12,6 +12,7 @@ const {
   notifyTenantUpdated,
 } = require('../services/notificationService');
 const { serializeTenant } = require('../utils/api');
+const { LIMITS, formatMoney, requireMoney } = require('../utils/money');
 
 const EMAIL_PATTERN = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/;
 
@@ -23,18 +24,10 @@ function optionalDate(value, label) {
   return date;
 }
 
-function money(value, label, { min = 0, max = 1e9 } = {}) {
-  const amount = Number(String(value ?? '').replace(',', '.'));
-  if (!Number.isFinite(amount) || amount < min || amount > max) {
-    throw new Error(label + ' geçersiz.');
-  }
-  return amount;
-}
-
 function cleanTenantInput(body = {}) {
   const name = String(body.name || '').trim();
   const address = String(body.address || '').trim();
-  const rentAmount = money(body.rentAmount, 'Kira tutarı', { min: 1 });
+  const rentAmount = requireMoney(body.rentAmount, 'rent');
   const paymentDay = Number(body.paymentDay);
 
   if (!name || name.length > 120) throw new Error('Kiracı adı 1-120 karakter olmalı.');
@@ -62,9 +55,7 @@ function cleanTenantInput(body = {}) {
     paymentDay,
     phone: String(body.phone || '').trim().slice(0, 32),
     email,
-    deposit: body.deposit === '' || body.deposit === undefined || body.deposit === null
-      ? 0
-      : money(body.deposit, 'Depozito'),
+    deposit: requireMoney(body.deposit, 'deposit', { allowEmpty: true }),
     increaseRate,
     contractStart,
     contractEnd,
@@ -79,13 +70,16 @@ function computeRaise(tenant, body) {
   let amount;
 
   if (body.amount !== undefined && body.amount !== '') {
-    amount = money(body.amount, 'Yeni kira tutarı', { min: 1 });
+    amount = requireMoney(body.amount, 'rent');
   } else {
     const rate = Number(String(body.rate ?? tenant.increaseRate ?? 0).replace(',', '.'));
     if (!Number.isFinite(rate) || rate <= 0 || rate > 200) {
       throw new Error('Artış oranı 0-200 arasında olmalı.');
     }
     amount = Math.round(previousAmount * (1 + rate / 100));
+    if (amount < LIMITS.rent.min) {
+      throw new Error('Hesaplanan kira ' + formatMoney(amount) + ', alt sınır ' + formatMoney(LIMITS.rent.min) + '.');
+    }
   }
 
   if (amount === previousAmount) throw new Error('Yeni kira tutarı eskisiyle aynı.');
@@ -165,14 +159,41 @@ module.exports = async (req, res) => {
     const updated = cleanTenantInput({ ...tenant.toObject(), ...req.body });
     const rentChanged = updated.rentAmount !== tenant.rentAmount;
     const previousAmount = tenant.rentAmount;
+    /* İki farklı niyet var ve ayrı davranmaları gerekiyor:
+       zam → bu tarihten itibaren geçerli, geçmiş dönemler eski tutarda kalır;
+       düzeltme → tutar baştan beri buydu, geçmiş de bu tutara çekilir. */
+    const rentMode = String(req.body?.rentMode || 'raise') === 'correction' ? 'correction' : 'raise';
+
     Object.assign(tenant, updated);
-    if (rentChanged) {
-      tenant.rentHistory.push({
+
+    if (rentChanged && rentMode === 'correction') {
+      const start = tenant.contractStart ||
+        (tenant.rentHistory || []).map((item) => item.effectiveFrom).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))[0] ||
+        tenant.createdAt ||
+        new Date();
+      tenant.rentHistory = [{
         amount: updated.rentAmount,
-        previousAmount,
+        previousAmount: 0,
+        effectiveFrom: start,
+        note: 'Tutar düzeltildi',
+      }];
+    } else if (rentChanged) {
+      // Aynı gün içindeki tekrar düzenlemeler yeni satır açmasın, üzerine yazsın.
+      const bugun = new Date().toDateString();
+      const son = tenant.rentHistory[tenant.rentHistory.length - 1];
+      const kayit = {
+        amount: updated.rentAmount,
+        previousAmount: son && new Date(son.effectiveFrom).toDateString() === bugun
+          ? son.previousAmount
+          : previousAmount,
         effectiveFrom: new Date(),
         note: 'Düzenleme ile güncellendi',
-      });
+      };
+      if (son && new Date(son.effectiveFrom).toDateString() === bugun) {
+        tenant.rentHistory[tenant.rentHistory.length - 1] = kayit;
+      } else {
+        tenant.rentHistory.push(kayit);
+      }
     }
     await tenant.save();
     const notification = await notifyTenantUpdated(tenant);

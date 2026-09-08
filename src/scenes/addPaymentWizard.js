@@ -1,6 +1,7 @@
 const { Scenes, Markup } = require('telegraf');
 const Tenant = require('../models/tenant');
 const Payment = require('../models/payment');
+const { requireMoney } = require('../utils/money');
 const { formatCurrency, formatDate, formatMonthYear, now } = require('../utils/format');
 const { tenantListKeyboard, confirmKeyboard, cancelKeyboard } = require('../utils/keyboard');
 const { notifyPaymentRecorded } = require('../services/notificationService');
@@ -47,9 +48,11 @@ addPaymentWizard.on('text', async (ctx) => {
   const step = ctx.wizard.cursor;
 
   if (step === 1) {
-    const amount = parseFloat(ctx.message.text.trim());
-    if (isNaN(amount) || amount <= 0) {
-      return ctx.reply('Geçersiz tutar. Pozitif bir sayı girin:');
+    let amount;
+    try {
+      amount = requireMoney(ctx.message.text, 'payment');
+    } catch (error) {
+      return ctx.reply(error.message + '\nTekrar deneyin:');
     }
     ctx.wizard.state.amount = amount;
     await ctx.reply(

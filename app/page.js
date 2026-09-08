@@ -40,6 +40,7 @@ import {
 
 import CalendarBoard from "./components/Calendar";
 import DuesView from "./components/Dues";
+import MonthSheet from "./components/MonthSheet";
 import ExpensesView from "./components/Expenses";
 import PaymentGrid from "./components/PaymentGrid";
 import ReportsView from "./components/Reports";
@@ -1110,38 +1111,30 @@ export default function Page() {
   async function toggleGridCell(row, cell) {
     const key = row.tenantId + ":" + cell.month;
     const label = MONTH_LONG[cell.month - 1] + " " + grid.year;
-    const marked = cell.status === "paid";
 
-    if (marked && !window.confirm(
-      row.name + " · " + label + " için kayıtlı " + formatCurrency(cell.paid) + " silinsin mi?"
-    )) return;
-
+    /* Kayıt varsa dokunuş düzeltme penceresini açar: yanlış girilen ay
+       tutarıyla birlikte oradan düzelir. Boş aya dokunuş hızlı yoldur. */
+    if (cell.paid > 0) {
+      setModal({ type: "month", kind: "rent", row, cell, year: grid.year });
+      return;
+    }
 
     setGridPending(key);
     try {
-      if (marked) {
-        await apiRequest(
-          "/api/payments?tenantId=" + row.tenantId + "&month=" + cell.month + "&year=" + grid.year,
-          { method: "DELETE" },
-          token
-        );
-        setFlash({ tone: "ok", message: label + " işareti kaldırıldı." });
-      } else {
-        const result = await apiRequest(
-          "/api/payments",
-          {
-            method: "POST",
-            body: JSON.stringify({ tenantId: row.tenantId, month: cell.month, year: grid.year, fill: true }),
-          },
-          token
-        );
-        setFlash({
-          tone: "ok",
-          message: result.skipped
-            ? label + " zaten ödenmiş görünüyor."
-            : label + " · " + formatCurrency(result.payment.amount) + " ödendi olarak işaretlendi.",
-        });
-      }
+      const result = await apiRequest(
+        "/api/payments",
+        {
+          method: "POST",
+          body: JSON.stringify({ tenantId: row.tenantId, month: cell.month, year: grid.year, fill: true }),
+        },
+        token
+      );
+      setFlash({
+        tone: "ok",
+        message: result.skipped
+          ? label + " zaten ödenmiş görünüyor."
+          : label + " · " + formatCurrency(result.payment.amount) + " ödendi olarak işaretlendi.",
+      });
       setGridStamp((value) => value + 1);
       await reload();
     } catch (error) {
@@ -1156,28 +1149,25 @@ export default function Page() {
   async function toggleDueCell(row, cell) {
     const key = row.dueId + ":" + cell.month;
     const label = MONTH_LONG[cell.month - 1] + " " + dues.year;
+
+    if (cell.paid) {
+      setModal({ type: "month", kind: "due", row, cell, year: dues.year });
+      return;
+    }
+
     setDuesPending(key);
     try {
-      if (cell.paid) {
-        await apiRequest(
-          "/api/dues?dueId=" + row.dueId + "&month=" + cell.month + "&year=" + dues.year,
-          { method: "DELETE" },
-          token
-        );
-        setFlash({ tone: "ok", message: row.title + " · " + label + " işareti kaldırıldı." });
-      } else {
-        const result = await apiRequest(
-          "/api/dues",
-          { method: "POST", body: JSON.stringify({ dueId: row.dueId, month: cell.month, year: dues.year }) },
-          token
-        );
-        setFlash({
-          tone: "ok",
-          message: result.skipped
-            ? label + " zaten ödenmiş görünüyor."
-            : row.title + " · " + label + " · " + formatCurrency(result.amount) + " ödendi.",
-        });
-      }
+      const result = await apiRequest(
+        "/api/dues",
+        { method: "POST", body: JSON.stringify({ dueId: row.dueId, month: cell.month, year: dues.year }) },
+        token
+      );
+      setFlash({
+        tone: "ok",
+        message: result.skipped
+          ? label + " zaten ödenmiş görünüyor."
+          : row.label + " · " + label + " · " + formatCurrency(result.amount) + " ödendi.",
+      });
       setDuesStamp((value) => value + 1);
       await reload();
     } catch (error) {
@@ -1742,6 +1732,23 @@ export default function Page() {
           token={token}
           onClose={() => setModal(null)}
           onSaved={handleSaved}
+        />
+      ) : null}
+      {modal?.type === "month" ? (
+        <MonthSheet
+          kind={modal.kind}
+          row={modal.row}
+          cell={modal.cell}
+          year={modal.year}
+          token={token}
+          onClose={() => setModal(null)}
+          onSaved={async (message) => {
+            setModal(null);
+            setFlash({ tone: "ok", message });
+            setGridStamp((value) => value + 1);
+            setDuesStamp((value) => value + 1);
+            await reload();
+          }}
         />
       ) : null}
       {modal?.type === "due" ? (

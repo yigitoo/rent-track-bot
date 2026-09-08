@@ -73,6 +73,9 @@ export async function apiRequest(url, options = {}, token = "") {
   return payload;
 }
 
+/* Para okuma/yazma tek yerde: panel, API ve bot aynı kuralı kullanır. */
+export { LIMITS, formatMoneyShort, parseMoney, roundMoney } from "../../src/utils/money";
+
 const currency = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 });
 
 export function formatCurrency(value) {

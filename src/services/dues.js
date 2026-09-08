@@ -113,6 +113,43 @@ async function unmarkDue({ dueId, month, year, source = 'web' }) {
   return { due, expense, skipped: false, notification, ...period };
 }
 
+/* Bir ayın aidat tutarını doğrudan yaz. Yanlış girilen ay burada düzelir;
+   kayıt yoksa açılır, varsa tutarı ve ödendi bilgisi güncellenir. */
+async function setDueAmount({ dueId, month, year, amount, paid = true, source = 'web' }) {
+  const period = normalizePeriod(month, year);
+  const due = await findDue(dueId);
+  const tutar = Math.round((Number(amount) || 0) * 100) / 100;
+  if (tutar <= 0) throw new Error('Aidat tutarı pozitif olmalı.');
+
+  let expense = await Expense.findOne({ recurrence: due._id, month: period.month, year: period.year });
+  if (expense) {
+    expense.amount = tutar;
+    expense.paid = Boolean(paid);
+    expense.paidAt = paid ? now().toDate() : null;
+    await expense.save();
+  } else {
+    expense = await Expense.create({
+      title: due.title,
+      category: CATEGORY,
+      amount: tutar,
+      date: dueDateFor(due, period.month, period.year),
+      month: period.month,
+      year: period.year,
+      tenant: due.tenant || null,
+      recurrence: due._id,
+      note: due.note,
+      paid: Boolean(paid),
+      paidAt: paid ? now().toDate() : null,
+    });
+  }
+
+  const notification = paid
+    ? await notifyDueSettled(due, { ...period, amount: tutar, source })
+    : await notifyDueReopened(due, { ...period, amount: tutar, source });
+
+  return { due, expense, notification, action: 'set', ...period };
+}
+
 async function toggleDue({ dueId, month, year, source = 'web' }) {
   const period = normalizePeriod(month, year);
   const due = await findDue(dueId);
@@ -126,4 +163,4 @@ async function toggleDue({ dueId, month, year, source = 'web' }) {
   return { ...result, action: 'marked' };
 }
 
-module.exports = { CATEGORY, loadPeriod, loadYearGrid, markDuePaid, toggleDue, unmarkDue };
+module.exports = { CATEGORY, loadPeriod, loadYearGrid, markDuePaid, setDueAmount, toggleDue, unmarkDue };

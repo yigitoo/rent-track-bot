@@ -100,6 +100,44 @@ async function clearPeriod({ tenantId, month, year, source = 'web' }) {
   return { tenant, removed: existing.length, amount, notification, skipped: false, ...period };
 }
 
+/* Bir dönemin tutarını doğrudan yaz: yanlış girilen ay tek yerden düzelsin.
+   Dönemin eski kayıtları silinir, yerine tek kayıt geçer. Tutar sıfırsa
+   dönem tamamen temizlenir. */
+async function setPeriodAmount({ tenantId, month, year, amount, source = 'web', note = '' }) {
+  const period = normalizePeriod(month, year);
+  const tutar = Math.round((Number(amount) || 0) * 100) / 100;
+  if (tutar < 0) throw new Error('Tutar negatif olamaz.');
+  if (tutar === 0) return { ...(await clearPeriod({ tenantId, ...period, source })), action: 'cleared' };
+
+  const tenant = await findTenant(tenantId);
+  const oncekiler = await Payment.find({ tenant: tenant._id, month: period.month, year: period.year });
+  if (oncekiler.length) {
+    await Payment.deleteMany({ tenant: tenant._id, month: period.month, year: period.year });
+  }
+
+  const payment = await Payment.create({
+    tenant: tenant._id,
+    amount: tutar,
+    date: periodPaymentDate(tenant, period.month, period.year),
+    month: period.month,
+    year: period.year,
+    note,
+    source,
+  });
+
+  const notification = await notifyPaymentRecorded(payment, tenant, { source });
+  return {
+    tenant,
+    payment,
+    notification,
+    action: 'set',
+    replaced: oncekiler.length,
+    expected: rentAtMonth(tenant, period.month, period.year),
+    totalPaid: tutar,
+    ...period,
+  };
+}
+
 /* Tam ödenmişse işaret kalkar; eksikse dokunuş kalanı tamamlar. Kutucuk
    "ödendi" demek, o yüzden yarım kayıt tek dokunuşta tamamlanır. */
 async function togglePeriod({ tenantId, month, year, source = 'web' }) {
@@ -128,5 +166,6 @@ module.exports = {
   loadYearGrid,
   markPeriodPaid,
   periodSummary,
+  setPeriodAmount,
   togglePeriod,
 };

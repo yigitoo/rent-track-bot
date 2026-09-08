@@ -1,5 +1,6 @@
 const { Scenes, Markup } = require('telegraf');
 const Tenant = require('../models/tenant');
+const { requireMoney } = require('../utils/money');
 const { formatCurrency } = require('../utils/format');
 const { tenantListKeyboard, cancelKeyboard } = require('../utils/keyboard');
 const { normalizePaymentDay } = require('../utils/rentSchedule');
@@ -55,9 +56,10 @@ editTenantWizard.on('text', async (ctx) => {
 
   let value = ctx.message.text.trim();
   if (field === 'rentAmount') {
-    value = parseFloat(value);
-    if (isNaN(value) || value <= 0) {
-      return ctx.reply('Geçersiz tutar. Pozitif bir sayı girin:');
+    try {
+      value = requireMoney(value, 'rent');
+    } catch (error) {
+      return ctx.reply(error.message + '\nTekrar deneyin:');
     }
   }
   if (field === 'paymentDay') {

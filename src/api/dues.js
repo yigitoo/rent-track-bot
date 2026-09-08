@@ -4,7 +4,8 @@ require('dotenv').config();
 const connectDB = require('../db');
 const { requireWebAuth } = require('../utils/webAuth');
 const { now } = require('../utils/format');
-const { loadPeriod, loadYearGrid, markDuePaid, unmarkDue } = require('../services/dues');
+const { loadPeriod, loadYearGrid, markDuePaid, setDueAmount, unmarkDue } = require('../services/dues');
+const { requireMoney } = require('../utils/money');
 
 function parseYear(value) {
   const year = Number(value);
@@ -48,6 +49,19 @@ module.exports = async (req, res) => {
     if (req.method === 'DELETE') {
       const result = await unmarkDue({ dueId, month, year, source: 'web' });
       return res.status(200).json({ skipped: result.skipped, reason: result.reason, month, year });
+    }
+
+    if (req.body?.amount !== undefined && String(req.body.amount).trim() !== '') {
+      const amount = requireMoney(req.body.amount, 'due');
+      const result = await setDueAmount({
+        dueId,
+        month,
+        year,
+        amount,
+        paid: req.body.paid !== false,
+        source: 'web',
+      });
+      return res.status(200).json({ action: 'set', amount: result.expense.amount, month, year });
     }
 
     const result = await markDuePaid({ dueId, month, year, source: 'web' });

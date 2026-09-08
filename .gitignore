@@ -146,3 +146,7 @@ vite.config.ts.timestamp-*
 # Local graphify architecture reports
 graphify-out/
 .env*
+
+# Kişisel finans belgeleri ve analiz çıktıları repoya girmez
+.DS_Store
+Banka dekontları/

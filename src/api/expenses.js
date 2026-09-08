@@ -8,6 +8,7 @@ const { requireWebAuth } = require('../utils/webAuth');
 const { parsePeriod, serializeExpense } = require('../utils/api');
 const { notifyExpenseDeleted, notifyExpenseRecorded } = require('../services/notificationService');
 const { categoryLabel } = require('../utils/categories');
+const { requireMoney } = require('../utils/money');
 
 const CATEGORIES = Expense.CATEGORIES;
 
@@ -15,8 +16,7 @@ function parseExpenseInput(body = {}) {
   const title = String(body.title || '').trim();
   if (!title || title.length > 120) throw new Error('Gider başlığı 1-120 karakter olmalı.');
 
-  const amount = Number(String(body.amount ?? '').replace(',', '.'));
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error('Gider tutarı pozitif olmalı.');
+  const amount = requireMoney(body.amount, 'expense');
 
   const category = CATEGORIES.includes(body.category) ? body.category : 'diger';
 

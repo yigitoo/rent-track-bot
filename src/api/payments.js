@@ -7,12 +7,12 @@ const Payment = require('../models/payment');
 const { requireWebAuth } = require('../utils/webAuth');
 const { parsePeriod, serializePayment } = require('../utils/api');
 const { now } = require('../utils/format');
+const { requireMoney } = require('../utils/money');
 const { notifyPaymentDeleted, notifyPaymentRecorded } = require('../services/notificationService');
-const { clearPeriod, loadYearGrid, markPeriodPaid } = require('../services/payments');
+const { clearPeriod, loadYearGrid, markPeriodPaid, setPeriodAmount } = require('../services/payments');
 
 function parsePaymentInput(body = {}) {
-  const amount = Number(String(body.amount ?? '').replace(',', '.'));
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error('Ödeme tutarı pozitif olmalı.');
+  const amount = requireMoney(body.amount, 'payment');
 
   const date = body.date ? new Date(body.date) : now().toDate();
   if (Number.isNaN(date.getTime())) throw new Error('Geçersiz ödeme tarihi.');
@@ -101,6 +101,27 @@ module.exports = async (req, res) => {
     const tenantId = String(req.body?.tenantId || req.body?.tenant || '').trim();
     if (!mongoose.isValidObjectId(tenantId)) {
       return res.status(400).json({ error: 'Geçersiz kiracı.' });
+    }
+
+    // Ay düzenlendi: dönemin tutarı doğrudan yazılır.
+    if (req.body?.setAmount !== undefined) {
+      const period = parsePeriod({ month: req.body.month, year: req.body.year });
+      const amount = String(req.body.setAmount).trim() === ''
+        ? 0
+        : requireMoney(req.body.setAmount, 'payment');
+      const result = await setPeriodAmount({
+        tenantId,
+        ...period,
+        amount,
+        source: 'web',
+        note: String(req.body.note || '').trim().slice(0, 240),
+      });
+      return res.status(200).json({
+        action: result.action,
+        amount: result.payment?.amount ?? 0,
+        replaced: result.replaced ?? result.removed ?? 0,
+        ...period,
+      });
     }
 
     // Kutucuk işaretlendi: tutar dönemin açığından hesaplanır.

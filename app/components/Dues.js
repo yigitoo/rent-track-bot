@@ -13,7 +13,7 @@ import {
   Trash,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { downloadCsv, formatCurrency, formatDate } from "../lib/client";
+import { downloadCsv, formatCurrency, formatDate, formatMoneyShort } from "../lib/client";
 
 const MONTH_LONG = [
   "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
@@ -28,12 +28,10 @@ const CELL = {
   outside: { label: "Kapsam dışı", glyph: Minus },
 };
 
-const COMPACT = new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 });
-
 function cellTitle(row, cell) {
   const period = MONTH_LONG[cell.month - 1];
   const state = CELL[cell.status]?.label || "Sırada";
-  const tail = cell.paid ? "İşareti kaldırmak için dokunun." : "Ödendi olarak işaretlemek için dokunun.";
+  const tail = cell.paid ? "Tutarı düzeltmek için dokunun." : "Ödendi olarak işaretlemek için dokunun.";
   return `${row.label} · ${period} · ${state} · ${formatCurrency(cell.amount)}. ${tail}`;
 }
 
@@ -113,7 +111,7 @@ export default function DuesView({
         <span className="pg-key state-overdue"><WarningCircle weight="fill" />Gecikti</span>
         <span className="pg-key state-pending"><Clock weight="fill" />Sırada</span>
         <span className="pg-hint">
-          İşaretlenen ay aynı anda gider kaydı olur; giderlere, takvime ve raporlara yansır.
+          Boş aya dokunun: ödendi işaretlenir ve gider kaydı oluşur. Dolu aya dokunun: tutarı düzeltin.
         </span>
       </div>
 
@@ -203,7 +201,7 @@ export default function DuesView({
                         <span className="pg-cell-month">{cell.label}</span>
                         <Glyph weight={cell.paid ? "fill" : "bold"} className="pg-cell-glyph" />
                       </span>
-                      <span className="pg-cell-amount num">{COMPACT.format(cell.amount)}</span>
+                      <span className="pg-cell-amount num">{formatMoneyShort(cell.amount)}</span>
                     </button>
                   );
                 })}

@@ -1,5 +1,6 @@
 const { Scenes } = require('telegraf');
 const Tenant = require('../models/tenant');
+const { requireMoney } = require('../utils/money');
 const { formatCurrency } = require('../utils/format');
 const { cancelKeyboard } = require('../utils/keyboard');
 const { normalizePaymentDay } = require('../utils/rentSchedule');
@@ -29,9 +30,11 @@ const addTenantWizard = new Scenes.WizardScene(
 
   async (ctx) => {
     if (!ctx.message?.text) return ctx.reply('Lütfen bir sayı girin.');
-    const amount = parseFloat(ctx.message.text.trim());
-    if (isNaN(amount) || amount <= 0) {
-      return ctx.reply('Geçersiz tutar. Pozitif bir sayı girin:');
+    let amount;
+    try {
+      amount = requireMoney(ctx.message.text, 'rent');
+    } catch (error) {
+      return ctx.reply(error.message + '\nTekrar deneyin:');
     }
     ctx.wizard.state.rentAmount = amount;
     ctx.reply('Kira ödeme gününü girin (1-31):', cancelKeyboard());
