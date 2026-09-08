@@ -717,6 +717,7 @@ export function RecurrenceSheet({
   const editId = item?.id || item?.dueId || "";
   const [form, setForm] = useState({
     title: item?.title || "",
+    unit: item?.unit || "",
     category: lockCategory || item?.category || "aidat",
     amount: item?.amount ?? "",
     dayOfMonth: item?.dayOfMonth || dayOfMonth || 1,
@@ -772,9 +773,15 @@ export function RecurrenceSheet({
             : "Ayın belirlediğiniz gününde otomatik gider kaydı oluşur. Takvimde günü gelene kadar planlı olarak görünür."}
         </p>
         <div className="form-grid">
-          <div className="field span-2">
+          {lockCategory === "aidat" ? (
+            <div className="field">
+              <label htmlFor="rec-unit">Daire</label>
+              <input id="rec-unit" value={form.unit} onChange={(e) => update("unit", e.target.value)} maxLength={60} placeholder="Örn. Daire 3" autoComplete="off" />
+            </div>
+          ) : null}
+          <div className={"field" + (lockCategory === "aidat" ? "" : " span-2")}>
             <label htmlFor="rec-title">Başlık</label>
-            <input id="rec-title" value={form.title} onChange={(e) => update("title", e.target.value)} maxLength={120} placeholder="Örn. A Blok apartman aidatı" autoComplete="off" required />
+            <input id="rec-title" value={form.title} onChange={(e) => update("title", e.target.value)} maxLength={120} placeholder={lockCategory === "aidat" ? "Örn. Apartman aidatı" : "Örn. A Blok apartman aidatı"} autoComplete="off" required />
           </div>
           {lockCategory ? null : (
             <div className="field">

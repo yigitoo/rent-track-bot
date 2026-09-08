@@ -6,6 +6,7 @@ function serializeRecurrence(item) {
   return {
     id: item._id.toString(),
     title: item.title,
+    unit: item.unit || '',
     category: item.category,
     amount: item.amount,
     dayOfMonth: item.dayOfMonth,

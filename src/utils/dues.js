@@ -38,7 +38,16 @@ function buildDuesYearGrid({ year, recurrences, expenses, reference = now().toDa
     byCell.set(expense.recurrence.toString() + ':' + expense.month, expense);
   }
 
-  const rows = recurrences.map((item) => {
+  const ordered = [...recurrences].sort((a, b) => {
+    const left = (a.unit || '').trim();
+    const right = (b.unit || '').trim();
+    if (left && right && left !== right) return left.localeCompare(right, 'tr', { numeric: true });
+    if (left && !right) return -1;
+    if (!left && right) return 1;
+    return (a.title || '').localeCompare(b.title || '', 'tr');
+  });
+
+  const rows = ordered.map((item) => {
     const id = item._id.toString();
 
     const months = Array.from({ length: 12 }, (unused, index) => {
@@ -72,6 +81,8 @@ function buildDuesYearGrid({ year, recurrences, expenses, reference = now().toDa
     return {
       dueId: id,
       title: item.title,
+      unit: item.unit || '',
+      label: item.unit || item.title,
       amount: item.amount,
       dayOfMonth: item.dayOfMonth,
       tenantId: item.tenant?._id?.toString() || item.tenant?.toString() || '',
@@ -121,12 +132,13 @@ function buildDuesPeriod({ month, year, recurrences, expenses, reference = now()
     .map((row) => ({
       dueId: row.dueId,
       title: row.title,
+      unit: row.unit,
+      label: row.label,
       tenantName: row.tenantName,
       dayOfMonth: row.dayOfMonth,
       ...row.months[month - 1],
     }))
-    .filter((row) => row.covered)
-    .sort((a, b) => a.dayOfMonth - b.dayOfMonth);
+    .filter((row) => row.covered);
 
   const expected = rows.reduce((sum, row) => sum + row.amount, 0);
   const settled = rows.filter((row) => row.paid).reduce((sum, row) => sum + row.amount, 0);

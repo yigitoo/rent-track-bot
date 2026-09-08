@@ -231,7 +231,7 @@ function AnnualView({ annual, year, years, busy, downloading, onYear, onPdf, onO
             <table className="matrix">
               <thead>
                 <tr>
-                  <th scope="col" className="matrix-name">Aidat kalemi</th>
+                  <th scope="col" className="matrix-name">Daire / kalem</th>
                   <th scope="col" className="matrix-join">İlgili kiracı</th>
                   {MONTH_SHORT.map((label, index) => (
                     <th scope="col" key={label} className={index + 1 === currentMonth ? "is-now" : ""}>
@@ -245,7 +245,7 @@ function AnnualView({ annual, year, years, busy, downloading, onYear, onPdf, onO
               <tbody>
                 {annual.dues.rows.map((row) => (
                   <tr key={row.dueId}>
-                    <th scope="row" className="matrix-name"><span>{row.title}</span></th>
+                    <th scope="row" className="matrix-name"><span>{row.label}</span></th>
                     <td className="matrix-join">{row.tenantName || "Genel"}</td>
                     {row.months.map((cell) => {
                       const state = cell.paid ? "paid" : !cell.covered ? "outside" : cell.status === "overdue" ? "unpaid" : "future";

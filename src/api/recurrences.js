@@ -35,6 +35,7 @@ function parseInput(body = {}) {
 
   return {
     title,
+    unit: String(body.unit || '').trim().slice(0, 60),
     category,
     amount,
     dayOfMonth,

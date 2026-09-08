@@ -28,7 +28,7 @@ function overviewText(grid) {
   lines.push('Oca ▸ Ara');
   for (const row of grid.rows) {
     lines.push('');
-    lines.push(row.title + (row.tenantName ? ' · ' + row.tenantName : '') + (row.isActive ? '' : ' (duraklatıldı)'));
+    lines.push(row.label + (row.unit ? ' · ' + row.title : '') + (row.tenantName ? ' · ' + row.tenantName : '') + (row.isActive ? '' : ' (duraklatıldı)'));
     lines.push(row.months.map((cell) => MARK[cell.status] || '⬜').join(''));
     lines.push(
       row.paidMonths + '/12 ödendi · ' + formatCurrency(row.settled) +
@@ -48,7 +48,7 @@ function overviewText(grid) {
 function overviewKeyboard(grid) {
   return Markup.inlineKeyboard([
     ...chunk(
-      grid.rows.map((row) => cb(row.paidMonths + '/12 · ' + row.title, 'due:i:' + grid.year + ':' + row.dueId)),
+      grid.rows.map((row) => cb(row.paidMonths + '/12 · ' + row.label, 'due:i:' + grid.year + ':' + row.dueId)),
       1
     ),
     yearRow('due:y:', grid.year),
@@ -61,8 +61,8 @@ function itemText(grid, row) {
   const late = row.months.filter((cell) => cell.status === 'overdue');
 
   const lines = [
-    '🏢 ' + row.title + ' · ' + grid.year,
-    row.tenantName ? 'İlgili kiracı: ' + row.tenantName : 'Genel gider',
+    '🏢 ' + row.label + ' · ' + grid.year,
+    (row.unit ? row.title + ' · ' : '') + (row.tenantName ? 'İlgili kiracı: ' + row.tenantName : 'Genel gider'),
     '',
     'Tutar: ' + formatCurrency(row.amount) + ' · her ayın ' + row.dayOfMonth + '. günü',
     'Ödenen: ' + formatCurrency(row.settled) + ' / ' + formatCurrency(row.expected) + ' (%' + row.rate + ')',

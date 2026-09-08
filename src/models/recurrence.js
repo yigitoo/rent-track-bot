@@ -5,6 +5,8 @@ const Expense = require('./expense');
    geldiğinde gerçek gider kaydına dönüşür. */
 const recurrenceSchema = new Schema({
   title: { type: String, required: true, trim: true },
+  // Aidat daire daire tutulur; boş bırakılırsa kalem genel sayılır.
+  unit: { type: String, default: '', trim: true },
   category: { type: String, enum: Expense.CATEGORIES, default: 'aidat' },
   amount: { type: Number, required: true, min: 0 },
   dayOfMonth: { type: Number, required: true, min: 1, max: 31 },

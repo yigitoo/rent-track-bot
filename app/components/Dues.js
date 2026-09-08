@@ -34,7 +34,7 @@ function cellTitle(row, cell) {
   const period = MONTH_LONG[cell.month - 1];
   const state = CELL[cell.status]?.label || "Sırada";
   const tail = cell.paid ? "İşareti kaldırmak için dokunun." : "Ödendi olarak işaretlemek için dokunun.";
-  return `${row.title} · ${period} · ${state} · ${formatCurrency(cell.amount)}. ${tail}`;
+  return `${row.label} · ${period} · ${state} · ${formatCurrency(cell.amount)}. ${tail}`;
 }
 
 export default function DuesView({
@@ -65,8 +65,9 @@ export default function DuesView({
   function exportCsv() {
     downloadCsv(
       "vedat-gayrimenkul-" + grid.year + "-aidat.csv",
-      ["Aidat kalemi", "İlgili kiracı", "Ayın günü", ...grid.monthLabels, "Beklenen", "Ödenen", "Açık", "Oran"],
+      ["Daire", "Aidat kalemi", "İlgili kiracı", "Ayın günü", ...grid.monthLabels, "Beklenen", "Ödenen", "Açık", "Oran"],
       grid.rows.map((row) => [
+        row.unit || "—",
         row.title,
         row.tenantName || "Genel",
         row.dayOfMonth,
@@ -128,10 +129,14 @@ export default function DuesView({
                 <div className="pg-who">
                   <span className="avatar"><Buildings weight="fill" /></span>
                   <span className="who-copy">
-                    <strong>{row.title}</strong>
+                    <strong>{row.label}</strong>
                     <span>
-                      {row.tenantName || "Genel gider"} · her ayın {row.dayOfMonth}. günü
-                      {row.isActive ? "" : " · duraklatıldı"}
+                      {[
+                        row.unit ? row.title : null,
+                        row.tenantName || "Genel gider",
+                        "her ayın " + row.dayOfMonth + ". günü",
+                        row.isActive ? null : "duraklatıldı",
+                      ].filter(Boolean).join(" · ")}
                     </span>
                   </span>
                 </div>
@@ -173,7 +178,7 @@ export default function DuesView({
                 </span>
               </div>
 
-              <div className="pg-months" role="group" aria-label={row.title + " · " + grid.year + " ayları"}>
+              <div className="pg-months" role="group" aria-label={row.label + " · " + grid.year + " ayları"}>
                 {row.months.map((cell) => {
                   const info = CELL[cell.status] || CELL.future;
                   const Glyph = info.glyph;
@@ -218,8 +223,8 @@ export default function DuesView({
           <Buildings weight="duotone" />
           <strong>Henüz aidat kalemi yok</strong>
           <span>
-            Apartman ya da site aidatını ekleyin; her ayın 12 kutucuğu oluşur, işaretledikçe
-            gider ve raporlara işlenir.
+            Daire daire ekleyin: her daire için 12 kutucuk oluşur, işaretledikçe gider
+            ve raporlara işlenir.
           </span>
         </div>
       )}

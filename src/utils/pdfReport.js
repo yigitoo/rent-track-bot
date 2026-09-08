@@ -393,16 +393,18 @@ function buildMonthReportPdf(report) {
     );
     table(doc, {
       columns: [
-        { label: 'Aidat kalemi', weight: 3 },
-        { label: 'İlgili kiracı', weight: 2 },
-        { label: 'Son ödeme', weight: 1.5, align: 'right' },
-        { label: 'Tutar', weight: 1.5, align: 'right' },
-        { label: 'Durum', weight: 1.4, align: 'center' },
+        { label: 'Daire', weight: 1.4 },
+        { label: 'Aidat kalemi', weight: 2.4 },
+        { label: 'İlgili kiracı', weight: 1.8 },
+        { label: 'Son ödeme', weight: 1.4, align: 'right' },
+        { label: 'Tutar', weight: 1.4, align: 'right' },
+        { label: 'Durum', weight: 1.3, align: 'center' },
       ],
       rows: dues.rows.map((row) => {
         const style = STATUS_STYLE[row.status] || STATUS_STYLE.pending;
         return [
-          { text: row.title, font: 'semi' },
+          { text: row.unit || '—', font: 'semi' },
+          { text: row.title, color: C.ink2 },
           { text: row.tenantName || 'Genel', color: C.ink3 },
           { text: formatDate(row.dueDate), color: C.ink2, size: 8 },
           { text: formatCurrency(row.amount), color: row.paid ? C.ok : C.warn, font: 'semi' },
@@ -593,14 +595,14 @@ function buildAnnualReportPdf(annual) {
     table(doc, {
       rowHeight: 22,
       columns: [
-        { label: 'Aidat kalemi', weight: 3.1 },
+        { label: 'Daire / kalem', weight: 3.1 },
         { label: 'İlgili kiracı', weight: 2.05, tight: true },
         ...MONTH_SHORT.map((label) => ({ label, weight: 0.66, align: 'center', tight: true })),
         { label: 'Ödenen', weight: 1.6, align: 'right' },
         { label: 'Oran', weight: 0.95, align: 'right', tight: true },
       ],
       rows: annual.dues.rows.map((row) => [
-        { text: row.title, font: 'semi' },
+        { text: row.label, font: 'semi' },
         { text: row.tenantName || 'Genel', color: C.ink2, size: 7.8 },
         ...row.months.map((cell) => {
           const style = cell.paid
