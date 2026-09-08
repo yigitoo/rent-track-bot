@@ -3,6 +3,7 @@
    İşleyiciler tembel yükleniyor, böylece bir istek yalnız ihtiyacı olan
    bağımlılığı (mongoose, telegraf, nodemailer) açıyor. */
 const routes = {
+  bus: () => require('../../src/api/bus'),
   cron: () => require('../../src/api/cron'),
   dashboard: () => require('../../src/api/dashboard'),
   deferments: () => require('../../src/api/deferments'),

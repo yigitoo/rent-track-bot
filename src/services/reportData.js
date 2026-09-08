@@ -5,6 +5,7 @@ const Recurrence = require('../models/recurrence');
 const { formatMonthYear } = require('../utils/format');
 const { categoryLabel } = require('../utils/categories');
 const { buildDuesPeriod, buildDuesYearGrid } = require('../utils/dues');
+const busService = require('./bus');
 const {
   buildAgenda,
   buildAnnual,
@@ -89,6 +90,7 @@ async function monthReport(month, year) {
     })),
     byCategory: buildCategoryBreakdown(expenses),
     dues: buildDuesPeriod({ month, year, recurrences: dueItems, expenses }),
+    bus: await busService.monthReport({ month, year }),
     totals: {
       expected,
       received,
@@ -169,4 +171,67 @@ async function rangeReport(monthCount) {
   };
 }
 
-module.exports = { annualReport, monthReport, rangeReport };
+/* Genel rapor: kira, gider ve otobüs hattı tek seride. İki iş kolunun
+   raporu ayrı ayrı da alınabiliyor; bu görünüm ikisini üst üste koyar. */
+async function combinedReport(monthCount = 12) {
+  const [kira, otobus] = await Promise.all([
+    rangeReport(monthCount),
+    busService.rangeReport(monthCount),
+  ]);
+
+  const otobusAy = new Map(otobus.series.map((item) => [item.year + '-' + item.month, item]));
+
+  const series = kira.series.map((item) => {
+    const bus = otobusAy.get(item.year + '-' + item.month) || { gross: 0, net: 0, expense: 0, days: 0 };
+    return {
+      month: item.month,
+      year: item.year,
+      label: item.label,
+      short: item.short,
+      rentExpected: item.expected,
+      rentReceived: item.received,
+      expense: item.expense,
+      busGross: bus.gross,
+      busExpense: bus.expense,
+      busNet: bus.net,
+      busDays: bus.days,
+      net: Math.round((item.received - item.expense + bus.net) * 100) / 100,
+    };
+  });
+
+  const totals = series.reduce(
+    (acc, item) => ({
+      rentExpected: acc.rentExpected + item.rentExpected,
+      rentReceived: acc.rentReceived + item.rentReceived,
+      expense: acc.expense + item.expense,
+      busGross: acc.busGross + item.busGross,
+      busExpense: acc.busExpense + item.busExpense,
+      busNet: acc.busNet + item.busNet,
+      busDays: acc.busDays + item.busDays,
+      net: acc.net + item.net,
+    }),
+    { rentExpected: 0, rentReceived: 0, expense: 0, busGross: 0, busExpense: 0, busNet: 0, busDays: 0, net: 0 }
+  );
+
+  const best = series.reduce((top, item) => (item.net > (top?.net ?? -Infinity) ? item : top), null);
+
+  return {
+    scope: 'combined',
+    months: monthCount,
+    series,
+    byTenant: kira.byTenant,
+    byCategory: kira.byCategory,
+    totals: {
+      ...totals,
+      income: Math.round((totals.rentReceived + totals.busGross) * 100) / 100,
+      rentRate: totals.rentExpected
+        ? Math.min(Math.round((totals.rentReceived / totals.rentExpected) * 100), 100)
+        : 0,
+      busMargin: totals.busGross ? Math.round((totals.busNet / totals.busGross) * 100) : 0,
+      averageMonthly: series.length ? Math.round(totals.net / series.length) : 0,
+      bestMonth: best ? { label: best.label, net: best.net } : null,
+    },
+  };
+}
+
+module.exports = { annualReport, combinedReport, monthReport, rangeReport };

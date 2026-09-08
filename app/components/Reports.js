@@ -2,10 +2,12 @@
 
 import {
   ArrowUpRight,
+  Bus,
   CalendarX,
   ChartLineUp,
   DownloadSimple,
   FilePdf,
+  GasPump,
   TrendUp,
   Vault,
   WarningCircle,
@@ -481,6 +483,269 @@ function RangeView({ report, months, busy, downloading, onRange, onSelectMonth, 
   );
 }
 
+/* ---------- Otobüs hattı ---------- */
+
+function BusReportView({ busReport, busPeriod, busy, downloading, onBusPeriod, onPdf }) {
+  if (!busReport) return <Loading label="Otobüs raporu hazırlanıyor" />;
+  const t = busReport.totals;
+
+  function exportCsv() {
+    downloadCsv(
+      "otobus-" + busReport.year + "-" + String(busReport.month).padStart(2, "0") + ".csv",
+      ["Gün", "Araç", "Toplam", "Mazot", "Yövmiye", "Denekçi", "Diğer", "Kalan", "Not"],
+      busReport.rows.map((row) => [
+        row.day, row.busNumber, row.gross, row.fuel, row.wage, row.fee, row.other, row.net, row.note || "",
+      ])
+    );
+  }
+
+  return (
+    <div className="view" data-busy={busy} aria-busy={busy}>
+      <div className="view-bar">
+        <p className="view-summary">
+          {busReport.label} · {t.days} gün · {formatCurrency(t.gross)} hasılat · {formatCurrency(t.net)} kalan
+        </p>
+        <div className="view-actions">
+          <div className="period glass glass--chip">
+            <button type="button" onClick={() => onBusPeriod(-1)} aria-label="Önceki ay">‹</button>
+            <strong>{busReport.label}</strong>
+            <button type="button" onClick={() => onBusPeriod(1)} aria-label="Sonraki ay">›</button>
+          </div>
+          <button className="btn btn-glass btn-sm" type="button" onClick={exportCsv}>
+            <DownloadSimple weight="bold" />
+            CSV
+          </button>
+          <button
+            className={"btn btn-primary btn-sm" + (downloading ? " is-busy" : "")}
+            type="button"
+            onClick={() => onPdf("bus")}
+          >
+            <FilePdf weight="bold" />
+            PDF indir
+          </button>
+        </div>
+      </div>
+
+      <div className="bento bento-4">
+        <article className="tile glass tile-accent" style={{ "--i": 0 }}>
+          <div className="tile-head"><Bus weight="duotone" />Toplam hasılat</div>
+          <div className="tile-value num">{formatCurrency(t.gross)}</div>
+          <p className="tile-meta">{t.days} gün · günlük ort. {formatCurrency(t.averageGross)}</p>
+        </article>
+        <article className="tile glass" style={{ "--i": 1 }}>
+          <div className="tile-head"><GasPump weight="duotone" />Mazot</div>
+          <div className="tile-value num">{formatCurrency(t.fuel)}</div>
+          <p className="tile-meta">hasılatın %{t.gross ? Math.round((t.fuel / t.gross) * 100) : 0}&apos;i</p>
+        </article>
+        <article className="tile glass" style={{ "--i": 2 }}>
+          <div className="tile-head"><ChartLineUp weight="duotone" />Toplam gider</div>
+          <div className="tile-value num">{formatCurrency(t.expense)}</div>
+          <p className="tile-meta">yövmiye {formatCurrency(t.wage)} · denekçi {formatCurrency(t.fee)}</p>
+        </article>
+        <article className="tile glass" style={{ "--i": 3 }}>
+          <div className="tile-head"><TrendUp weight="duotone" />Kalan</div>
+          <div className={"tile-value num" + (t.net < 0 ? " tone-bad" : "")}>{formatCurrency(t.net)}</div>
+          <div className="spark tone-accent"><i style={{ width: Math.max(Math.min(t.margin, 100), 0) + "%" }} /></div>
+          <p className="tile-meta">kâr marjı %{t.margin} · günlük {formatCurrency(t.averageNet)}</p>
+        </article>
+      </div>
+
+      <article className="panel glass">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">Ay sonu dökümü</p>
+            <h2>Gün gün kalemler</h2>
+          </div>
+          {t.missingDays ? (
+            <span className="pill pill-warn">{t.missingDays} gün kayıtsız</span>
+          ) : (
+            <span className="pill pill-ok">Ay tamamlandı</span>
+          )}
+        </div>
+
+        {busReport.rows.length ? (
+          <div className="matrix-scroll">
+            <table className="matrix bus-table">
+              <thead>
+                <tr>
+                  <th scope="col">Gün</th>
+                  <th scope="col">Araç</th>
+                  <th scope="col">Toplam</th>
+                  <th scope="col">Mazot</th>
+                  <th scope="col">Yövmiye</th>
+                  <th scope="col">Denekçi</th>
+                  <th scope="col">Diğer</th>
+                  <th scope="col">Kalan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {busReport.rows.map((row) => (
+                  <tr key={row.id}>
+                    <th scope="row">{row.day}</th>
+                    <td>{row.busNumber}</td>
+                    <td className="num">{formatCurrency(row.gross)}</td>
+                    <td className="num">{row.fuel ? formatCurrency(row.fuel) : "—"}</td>
+                    <td className="num">{row.wage ? formatCurrency(row.wage) : "—"}</td>
+                    <td className="num">{row.fee ? formatCurrency(row.fee) : "—"}</td>
+                    <td className="num">{row.other ? formatCurrency(row.other) : "—"}</td>
+                    <td className={"num " + (row.net < 0 ? "tone-bad" : "tone-ok")}>{formatCurrency(row.net)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row">Ay</th>
+                  <td>{t.days} gün</td>
+                  <td className="num">{formatCurrency(t.gross)}</td>
+                  <td className="num">{formatCurrency(t.fuel)}</td>
+                  <td className="num">{formatCurrency(t.wage)}</td>
+                  <td className="num">{formatCurrency(t.fee)}</td>
+                  <td className="num">{formatCurrency(t.other)}</td>
+                  <td className={"num " + (t.net < 0 ? "tone-bad" : "tone-ok")}>{formatCurrency(t.net)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ) : (
+          <div className="empty">
+            <Bus weight="duotone" />
+            <strong>Bu ay kayıt yok</strong>
+            <span>Otobüs sayfasından gün gün kalemleri girin.</span>
+          </div>
+        )}
+      </article>
+    </div>
+  );
+}
+
+/* ---------- Genel: kira + otobüs ---------- */
+
+function CombinedView({ combined, months, busy, downloading, onRange, onPdf }) {
+  if (!combined) return <Loading label="Genel rapor hazırlanıyor" />;
+  const t = combined.totals;
+
+  function exportCsv() {
+    downloadCsv(
+      "genel-rapor-son-" + combined.months + "-ay.csv",
+      ["Dönem", "Kira beklenen", "Kira tahsilat", "Mülk gideri", "Otobüs hasılat", "Otobüs gider", "Otobüs kalan", "Net"],
+      combined.series.map((item) => [
+        item.label, item.rentExpected, item.rentReceived, item.expense, item.busGross, item.busExpense, item.busNet, item.net,
+      ])
+    );
+  }
+
+  return (
+    <div className="view" data-busy={busy} aria-busy={busy}>
+      <div className="view-bar">
+        <p className="view-summary">
+          Son {combined.months} ay · {formatCurrency(t.income)} gelir · net {formatCurrency(t.net)}
+        </p>
+        <div className="view-actions">
+          <div className="filters glass glass--chip" role="group" aria-label="Dönem uzunluğu">
+            {RANGES.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={"filter" + (months === value ? " is-active" : "")}
+                onClick={() => onRange(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-glass btn-sm" type="button" onClick={exportCsv}>
+            <DownloadSimple weight="bold" />
+            CSV
+          </button>
+          <button
+            className={"btn btn-primary btn-sm" + (downloading ? " is-busy" : "")}
+            type="button"
+            onClick={() => onPdf("combined")}
+          >
+            <FilePdf weight="bold" />
+            PDF indir
+          </button>
+        </div>
+      </div>
+
+      <div className="bento bento-4">
+        <article className="tile glass tile-accent tile-wide" style={{ "--i": 0 }}>
+          <div className="tile-head"><TrendUp weight="duotone" />Toplam gelir</div>
+          <div className="tile-value num">{formatCurrency(t.income)}</div>
+          <p className="tile-meta">
+            {formatCurrency(t.rentReceived)} kira · {formatCurrency(t.busGross)} otobüs
+          </p>
+        </article>
+        <article className="tile glass" style={{ "--i": 1 }}>
+          <div className="tile-head"><ChartLineUp weight="duotone" />Toplam gider</div>
+          <div className="tile-value num">{formatCurrency(t.expense + t.busExpense)}</div>
+          <p className="tile-meta">{formatCurrency(t.expense)} mülk · {formatCurrency(t.busExpense)} hat</p>
+        </article>
+        <article className="tile glass" style={{ "--i": 2 }}>
+          <div className="tile-head"><Vault weight="duotone" />Birleşik net</div>
+          <div className={"tile-value num" + (t.net < 0 ? " tone-bad" : "")}>{formatCurrency(t.net)}</div>
+          <p className="tile-meta">aylık ortalama {formatCurrency(t.averageMonthly)}</p>
+        </article>
+      </div>
+
+      <article className="panel glass">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">İki iş kolu</p>
+            <h2>Aylara göre</h2>
+          </div>
+          <div className="matrix-legend">
+            <span>Kira tahsilatı, otobüs kalanı ve birleşik net</span>
+          </div>
+        </div>
+        <div className="matrix-scroll">
+          <table className="matrix bus-table">
+            <thead>
+              <tr>
+                <th scope="col">Dönem</th>
+                <th scope="col">Kira beklenen</th>
+                <th scope="col">Kira tahsilat</th>
+                <th scope="col">Mülk gideri</th>
+                <th scope="col">Otobüs hasılat</th>
+                <th scope="col">Otobüs kalan</th>
+                <th scope="col">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {combined.series.map((item) => (
+                <tr key={item.year + "-" + item.month}>
+                  <th scope="row">{item.label}</th>
+                  <td className="num">{formatCurrency(item.rentExpected)}</td>
+                  <td className="num tone-accent">{formatCurrency(item.rentReceived)}</td>
+                  <td className="num tone-warn">{formatCurrency(item.expense)}</td>
+                  <td className="num">{formatCurrency(item.busGross)}</td>
+                  <td className={"num " + (item.busNet < 0 ? "tone-bad" : "tone-ok")}>{formatCurrency(item.busNet)}</td>
+                  <td className={"num " + (item.net < 0 ? "tone-bad" : "")}>{formatCurrency(item.net)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th scope="row">Toplam</th>
+                <td className="num">{formatCurrency(t.rentExpected)}</td>
+                <td className="num">{formatCurrency(t.rentReceived)}</td>
+                <td className="num">{formatCurrency(t.expense)}</td>
+                <td className="num">{formatCurrency(t.busGross)}</td>
+                <td className="num">{formatCurrency(t.busNet)}</td>
+                <td className={"num " + (t.net < 0 ? "tone-bad" : "tone-ok")}>{formatCurrency(t.net)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p className="matrix-note">
+          Kira tahsilat oranı %{t.rentRate} · otobüs kâr marjı %{t.busMargin} · {t.busDays} gün işlendi
+          {t.bestMonth ? " · en iyi ay " + t.bestMonth.label : ""}
+        </p>
+      </article>
+    </div>
+  );
+}
+
 export default function ReportsView(props) {
   const { mode, onMode } = props;
 
@@ -488,7 +753,7 @@ export default function ReportsView(props) {
     <>
       <div className="mode-switch">
         <div className="filters glass glass--chip" role="group" aria-label="Rapor türü">
-          {[["range", "Dönem"], ["annual", "Yıllık"]].map(([key, label]) => (
+          {[["range", "Kira dönemi"], ["annual", "Kira yıllık"], ["bus", "Otobüs"], ["combined", "Genel"]].map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -502,7 +767,10 @@ export default function ReportsView(props) {
         </div>
       </div>
 
-      {mode === "annual" ? <AnnualView {...props} /> : <RangeView {...props} />}
+      {mode === "annual" ? <AnnualView {...props} />
+        : mode === "bus" ? <BusReportView {...props} />
+          : mode === "combined" ? <CombinedView {...props} />
+            : <RangeView {...props} />}
     </>
   );
 }

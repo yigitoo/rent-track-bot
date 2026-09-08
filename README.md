@@ -28,6 +28,12 @@ duruma döner — borç kaybolmaz. Kalemler kiracıya bağlanabilir, duraklatıl
 tutarı sonradan düzenlenebilir. Aidat girdiğiniz an giderler, takvim, net gelir
 ve raporlar birlikte güncellenir.
 
+**Otobüs** · Şehir içi hat defteri. Araçlar kâğıttaki numarayla kaydedilir
+(No = 7). Ayın her günü bir kutucuk; dokununca o günün **Toplam hasılat,
+Mazot, Yövmiye, Denekçi** ve varsa **Diğer** kalemleri girilir, **Kalan**
+yazarken hesaplanır. Gün kutucuğu kalanı gösterir, eksiye düşen gün kırmızı
+işaretlenir. Araç bazında aylık döküm ve ay sonu raporu aynı sayfadan alınır.
+
 **Giderler** · Tamir, vergi, sigorta, komisyon, fatura kırılımı; net gelir
 hesabı; her ayın belirli gününde otomatik oluşan **düzenli giderler**
 (duraklatılabilir). Düzenli bir kalem günü geldiğinde yükümlülük olarak düşer;
@@ -37,7 +43,10 @@ hesabı; her ayın belirli gününde otomatik oluşan **düzenli giderler**
 e-posta ve not. Kiracı dosyasında ödeme geçmişi (silinebilir), kira geçmişi ve
 oran ya da tutar üzerinden **kira artışı** uygulama. Arama ve arşiv.
 
-**Raporlar** · Üç mod. *Dönem*: 6/12/24 aylık tahsilat–gider–net serisi,
+**Raporlar** · Dört mod. *Kira dönemi* ve *Kira yıllık* mülk tarafını,
+*Otobüs* hat defterinin ay sonu dökümünü, *Genel* ise ikisini tek tabloda
+birleştirir (kira tahsilatı + otobüs kalanı − giderler = birleşik net).
+Hepsi CSV ve PDF olarak iner. Ayrıntı: *Dönem*: 6/12/24 aylık tahsilat–gider–net serisi,
 kiracı bazında performans, gider kategorileri, sözleşme ve zam gündemi.
 *Yıllık*: kiracı × ay tablosu — her kiracının portföye **dahil olduğu ay**
 işaretlenir (◆), öncesi "kiracı değil" olarak boş kalır; ay ay ödendi / eksik /
@@ -63,6 +72,10 @@ gündelik kullanımda komut yazmak gerekmez.
 - **🧾 Ödeme tablosu** — Yıl seç, kiracı seç, 12 ay düğmesinden birine dokun.
   Panelde işaretlediğin ay burada da işaretlidir; ikisi aynı kayda yazar.
 - **🏢 Aidat takibi** — Aynı 12 kutucuk mantığı aidat kalemleri için.
+- **🚌 Otobüs hattı** — Ayın özeti, araç bazında döküm ve ay sonu PDF raporu.
+  Kâğıttaki satır tek mesajda girilir: `/gun 7 9050 2700 2000 300`
+  (araç no, toplam, mazot, yövmiye, denekçi). Sonuna not eklenebilir,
+  başa tarih yazılırsa geçmiş güne işlenir. Kalan kendiliğinden hesaplanır.
 - **📄 Rapor / PDF** — Aylık (bir senenin tek ayı), yıllık ya da son 6/12/24 ay.
   PDF dosya olarak sohbete düşer; kira ve aidat aynı raporda.
 - **📊 Bu ayın durumu**, **🗓 Takvim**, **👥 Kiracılar**, **📉 Giderler**,
@@ -82,6 +95,8 @@ gündelik kullanımda komut yazmak gerekmez.
 - /menu — Ana menü
 - /odemetablosu — 12 aylık ödeme tablosu
 - /aidat — 12 aylık aidat takibi
+- /otobus — Otobüs hattı defteri ve ay raporu
+- /gun — Otobüs günü kaydet (/gun 7 9050 2700 2000 300)
 - /raporlar — PDF rapor merkezi
 - /durum — İçinde bulunulan ayın ödeme durumu
 - /takvim AA/YYYY — Durum işaretli Telegram takvimi

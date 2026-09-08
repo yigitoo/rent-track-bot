@@ -2234,3 +2234,140 @@ button { cursor: pointer; }
   .month-actions .btn { width: 100%; }
   .month-suggest { width: 100%; justify-content: center; }
 }
+
+/* ---------- 28. Otobüs hattı defteri ----------
+   Kâğıttaki not ne diyorsa ekran da onu söyler: gün gün Toplam, Mazot,
+   Yövmiye, Denekçi ve altında Kalan. */
+
+.bus-chips { display: flex; flex-wrap: wrap; gap: var(--a-2); }
+.bus-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--a-2);
+  min-height: 38px;
+  padding: 0 var(--a-4);
+  border-radius: var(--r-full);
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  touch-action: manipulation;
+  transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.bus-chip:hover { border-color: var(--line-strong); color: var(--text); }
+.bus-chip:active { transform: scale(0.96); }
+.bus-chip.is-active { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
+.bus-chip.is-add { border-style: dashed; color: var(--text-3); }
+.bus-chip svg { width: 15px; height: 15px; }
+.bus-chip-no { font-weight: 700; letter-spacing: -0.01em; }
+.bus-chip-net { font-size: 12px; opacity: 0.72; font-variant-numeric: tabular-nums; }
+
+.bus-legend { font-size: 12px; color: var(--text-3); }
+
+.bus-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+
+.bus-cell {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  min-height: 74px;
+  padding: 6px 4px;
+  border-radius: var(--r-2);
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--text-3);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.bus-cell.is-empty { border: 0; background: transparent; pointer-events: none; }
+.bus-cell:hover:not(.is-empty) { border-color: var(--accent-line); color: var(--text-2); }
+.bus-cell:active { transform: scale(0.95); }
+
+.bus-cell-day { font-size: 12px; font-weight: 650; color: var(--text-3); }
+.bus-cell-add { opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.bus-cell-add svg { width: 14px; height: 14px; }
+.bus-cell:hover .bus-cell-add { opacity: 0.7; }
+
+.bus-cell.is-filled {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.bus-cell.is-filled .bus-cell-day { color: color-mix(in srgb, var(--ok) 78%, var(--text-3)); }
+.bus-cell-net { font-size: 13px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.bus-cell-gross { font-size: 10.5px; font-weight: 600; opacity: 0.66; font-variant-numeric: tabular-nums; }
+
+.bus-cell.is-negative {
+  border-color: color-mix(in srgb, var(--bad) 32%, transparent);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.bus-cell.is-negative .bus-cell-day { color: color-mix(in srgb, var(--bad) 78%, var(--text-3)); }
+
+.bus-cell.is-today { box-shadow: 0 0 0 2px var(--accent-line); }
+.bus-cell.is-future { opacity: 0.55; }
+
+.bus-table th[scope="row"] button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+.bus-table th[scope="row"] button:hover { color: var(--accent); }
+.bus-table tfoot th, .bus-table tfoot td {
+  font-weight: 700;
+  border-top: 1px solid var(--line-strong);
+  padding-top: 6px;
+}
+
+/* Gün penceresindeki hesap özeti: kâğıdın alt satırı. */
+.bus-sum {
+  display: grid;
+  gap: 2px;
+  padding: var(--a-3) var(--a-4);
+  border-radius: var(--r-2);
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+}
+.bus-sum-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--a-3);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.bus-sum-row strong { font-variant-numeric: tabular-nums; font-weight: 650; color: var(--text); }
+.bus-sum-row.is-minus strong { color: var(--warn); }
+.bus-sum-row.is-result {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--accent-line);
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+.bus-sum-row.is-result strong { font-size: 17px; letter-spacing: -0.024em; color: var(--ok); }
+.bus-sum.is-negative .bus-sum-row.is-result strong { color: var(--bad); }
+
+@media (max-width: 720px) {
+  .bus-grid { gap: 5px; }
+  .bus-cell { min-height: 62px; }
+  .bus-cell-net { font-size: 12px; }
+  .bus-cell-gross { display: none; }
+  .bus-chip { min-height: 40px; }
+  .bus-legend { display: none; }
+}
+
+@media (max-width: 420px) {
+  .bus-cell { min-height: 56px; padding: 4px 2px; }
+  .bus-cell-day { font-size: 11px; }
+  .bus-cell-net { font-size: 11px; }
+}

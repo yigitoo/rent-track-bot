@@ -17,6 +17,7 @@ const registerPaymentCommands = require('./commands/payment');
 const registerSummaryCommands = require('./commands/summary');
 const registerGridCommands = require('./commands/grid');
 const registerDuesCommands = require('./commands/dues');
+const registerBusCommands = require('./commands/bus');
 const registerReportCommands = require('./commands/reports');
 const registerMailCommands = require('./commands/mail');
 const registerCalendarCommands = require('./commands/calendar');
@@ -45,6 +46,7 @@ async function main() {
   registerSummaryCommands(bot);
   registerGridCommands(bot);
   registerDuesCommands(bot);
+  registerBusCommands(bot);
   registerReportCommands(bot);
   registerMailCommands(bot);
   registerCalendarCommands(bot);

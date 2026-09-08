@@ -22,11 +22,12 @@ function panelUrl() {
 function mainMenu() {
   const rows = [
     [cb('📊 Bu ayın durumu', 'nav:status'), cb('🧾 Ödeme tablosu', 'nav:grid')],
-    [cb('🏢 Aidat takibi', 'nav:dues'), cb('📉 Giderler', 'nav:expenses')],
-    [cb('➕ Ödeme ekle', 'menu_odemeekle'), cb('⏳ Kira ertele', 'menu_kiraertele')],
-    [cb('🗓 Takvim', 'menu_takvim'), cb('📄 Rapor / PDF', 'nav:reports')],
-    [cb('👥 Kiracılar', 'nav:tenants'), cb('🔔 Bildirimler', 'nav:notifications')],
-    [cb('⚙️ Ayarlar', 'nav:settings'), cb('❓ Yardım', 'nav:help')],
+    [cb('🏢 Aidat takibi', 'nav:dues'), cb('🚌 Otobüs hattı', 'nav:bus')],
+    [cb('📉 Giderler', 'nav:expenses'), cb('📄 Rapor / PDF', 'nav:reports')],
+    [cb('⏳ Kira ertele', 'menu_kiraertele'), cb('👥 Kiracılar', 'nav:tenants')],
+    [cb('🗓 Takvim', 'menu_takvim'), cb('➕ Ödeme ekle', 'menu_odemeekle')],
+    [cb('🔔 Bildirimler', 'nav:notifications'), cb('⚙️ Ayarlar', 'nav:settings')],
+    [cb('❓ Yardım', 'nav:help')],
   ];
 
   const url = panelUrl();

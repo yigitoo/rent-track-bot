@@ -443,6 +443,197 @@ function buildMonthReportPdf(report) {
   return doc;
 }
 
+
+/* Otobüs hattı · ay sonu raporu. Kâğıttaki kalemlerin gün gün dökümü ve
+   ay toplamı: Toplam − (Mazot + Yövmiye + Denekçi + Diğer) = Kalan. */
+function buildBusMonthReportPdf(report) {
+  const doc = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true });
+  registerFonts(doc);
+
+  const t = report.totals;
+  header(doc, {
+    title: 'Otobüs hattı raporu',
+    subtitle: report.label + ' · ' + t.days + ' gün işlendi',
+    meta: formatDate(now().toDate()),
+  });
+
+  statCards(doc, [
+    { label: 'Toplam hasılat', value: formatCurrency(t.gross), fg: C.accent, bg: C.accentSoft },
+    { label: 'Mazot', value: formatCurrency(t.fuel), fg: C.warn, bg: C.warnSoft },
+    { label: 'Yövmiye', value: formatCurrency(t.wage), fg: C.ink },
+    { label: 'Denekçi', value: formatCurrency(t.fee), fg: C.ink },
+    { label: 'Kalan', value: formatCurrency(t.net), fg: t.net >= 0 ? C.ok : C.bad, bg: t.net >= 0 ? C.okSoft : C.badSoft },
+  ]);
+
+  if (report.perBus.length > 1) {
+    sectionTitle(doc, 'Araç bazında', 'Ayın toplamı');
+    table(doc, {
+      columns: [
+        { label: 'Araç', weight: 2.4 },
+        { label: 'Gün', weight: 0.8, align: 'right' },
+        { label: 'Toplam', weight: 1.6, align: 'right' },
+        { label: 'Mazot', weight: 1.4, align: 'right' },
+        { label: 'Yövmiye', weight: 1.4, align: 'right' },
+        { label: 'Denekçi', weight: 1.3, align: 'right' },
+        { label: 'Kalan', weight: 1.6, align: 'right' },
+      ],
+      rows: report.perBus.map((bus) => [
+        { text: (bus.number + ' numara' + (bus.label ? ' · ' + bus.label : '')).slice(0, 28), font: 'semi' },
+        { text: bus.totals.days, color: C.ink3 },
+        formatCurrency(bus.totals.gross),
+        { text: formatCurrency(bus.totals.fuel), color: C.warn },
+        formatCurrency(bus.totals.wage),
+        formatCurrency(bus.totals.fee),
+        { text: formatCurrency(bus.totals.net), color: bus.totals.net >= 0 ? C.ok : C.bad, font: 'semi' },
+      ]),
+      onNewPage: (d) => header(d, { title: 'Otobüs hattı raporu', subtitle: report.label + ' · araç bazında (devam)' }),
+    });
+  }
+
+  sectionTitle(
+    doc,
+    'Gün gün döküm',
+    t.missingDays ? t.missingDays + ' gün kayıtsız · ' + t.dayCount + ' günlük ay' : 'Ayın tamamı işlenmiş'
+  );
+
+  if (report.rows.length) {
+    table(doc, {
+      columns: [
+        { label: 'Gün', weight: 0.9, align: 'right' },
+        { label: 'Araç', weight: 1.05, align: 'center' },
+        { label: 'Toplam', weight: 1.6, align: 'right' },
+        { label: 'Mazot', weight: 1.4, align: 'right' },
+        { label: 'Yövmiye', weight: 1.4, align: 'right' },
+        { label: 'Denekçi', weight: 1.3, align: 'right' },
+        { label: 'Diğer', weight: 1.2, align: 'right' },
+        { label: 'Kalan', weight: 1.6, align: 'right' },
+        { label: 'Not', weight: 2, tight: true },
+      ],
+      rows: report.rows.map((row) => [
+        { text: row.day, font: 'semi' },
+        { text: row.busNumber, color: C.ink3 },
+        formatCurrency(row.gross),
+        { text: row.fuel ? formatCurrency(row.fuel) : '—', color: row.fuel ? C.warn : C.ink3 },
+        { text: row.wage ? formatCurrency(row.wage) : '—', color: row.wage ? C.ink : C.ink3 },
+        { text: row.fee ? formatCurrency(row.fee) : '—', color: row.fee ? C.ink : C.ink3 },
+        { text: row.other ? formatCurrency(row.other) : '—', color: row.other ? C.ink : C.ink3 },
+        { text: formatCurrency(row.net), color: row.net >= 0 ? C.ok : C.bad, font: 'semi' },
+        { text: row.note || row.otherNote || '', color: C.ink3, size: 7 },
+      ]),
+      onNewPage: (d) => header(d, { title: 'Otobüs hattı raporu', subtitle: report.label + ' · gün dökümü (devam)' }),
+    });
+
+    sectionTitle(doc, 'Ay toplamı');
+    table(doc, {
+      columns: [{ label: 'Kalem', weight: 3 }, { label: 'Tutar', weight: 2, align: 'right' }, { label: 'Payı', weight: 1.2, align: 'right' }],
+      rows: [
+        [{ text: 'Toplam hasılat', font: 'semi' }, { text: formatCurrency(t.gross), font: 'semi', color: C.accent }, '%100'],
+        ['Mazot', { text: formatCurrency(t.fuel), color: C.warn }, '%' + (t.gross ? Math.round((t.fuel / t.gross) * 100) : 0)],
+        ['Yövmiye', formatCurrency(t.wage), '%' + (t.gross ? Math.round((t.wage / t.gross) * 100) : 0)],
+        ['Denekçi', formatCurrency(t.fee), '%' + (t.gross ? Math.round((t.fee / t.gross) * 100) : 0)],
+        ['Diğer', formatCurrency(t.other), '%' + (t.gross ? Math.round((t.other / t.gross) * 100) : 0)],
+        [
+          { text: 'Kalan', font: 'bold' },
+          { text: formatCurrency(t.net), font: 'bold', color: t.net >= 0 ? C.ok : C.bad },
+          { text: '%' + t.margin, font: 'semi' },
+        ],
+      ],
+    });
+
+    doc.font('body').fontSize(8).fillColor(C.ink3).text(
+      'Günlük ortalama hasılat ' + formatCurrency(t.averageGross) + ' · günlük ortalama kalan ' + formatCurrency(t.averageNet),
+      doc.page.margins.left,
+      doc.y
+    );
+    doc.moveDown(1);
+  } else {
+    doc.font('body').fontSize(9).fillColor(C.ink3)
+      .text('Bu ay için kayıt girilmemiş.', doc.page.margins.left, doc.y);
+    doc.moveDown(1.4);
+  }
+
+  const range = doc.bufferedPageRange();
+  for (let index = 0; index < range.count; index += 1) {
+    doc.switchToPage(range.start + index);
+    footer(doc, index + 1);
+  }
+
+  return doc;
+}
+
+/* Genel rapor: kira ve otobüs yan yana, altta birleşik net. */
+function buildCombinedReportPdf(report) {
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 38, bufferPages: true });
+  registerFonts(doc);
+
+  const t = report.totals;
+  header(doc, {
+    title: 'Genel rapor',
+    subtitle: 'Kira ve otobüs hattı · son ' + report.months + ' ay',
+    meta: formatDate(now().toDate()),
+  });
+
+  statCards(doc, [
+    { label: 'Toplam gelir', value: formatCurrency(t.income), fg: C.accent, bg: C.accentSoft },
+    { label: 'Kira tahsilatı', value: formatCurrency(t.rentReceived), fg: C.ink },
+    { label: 'Otobüs hasılatı', value: formatCurrency(t.busGross), fg: C.ink },
+    { label: 'Gider', value: formatCurrency(t.expense + t.busExpense), fg: C.warn, bg: C.warnSoft },
+    { label: 'Net', value: formatCurrency(t.net), fg: t.net >= 0 ? C.ok : C.bad, bg: t.net >= 0 ? C.okSoft : C.badSoft },
+  ]);
+
+  sectionTitle(doc, 'Aylara göre', 'Kira tahsilatı, otobüs kalanı ve birleşik net');
+  table(doc, {
+    columns: [
+      { label: 'Dönem', weight: 2 },
+      { label: 'Kira beklenen', weight: 1.6, align: 'right' },
+      { label: 'Kira tahsilat', weight: 1.6, align: 'right' },
+      { label: 'Gider', weight: 1.4, align: 'right' },
+      { label: 'Otobüs hasılat', weight: 1.6, align: 'right' },
+      { label: 'Otobüs kalan', weight: 1.6, align: 'right' },
+      { label: 'Gün', weight: 0.8, align: 'right' },
+      { label: 'Net', weight: 1.7, align: 'right' },
+    ],
+    rows: report.series.map((item) => [
+      { text: item.label, font: 'semi' },
+      formatCurrency(item.rentExpected),
+      { text: formatCurrency(item.rentReceived), color: C.accent, font: 'semi' },
+      { text: formatCurrency(item.expense), color: C.warn },
+      formatCurrency(item.busGross),
+      { text: formatCurrency(item.busNet), color: item.busNet >= 0 ? C.ok : C.bad },
+      { text: item.busDays || '—', color: C.ink3 },
+      { text: formatCurrency(item.net), font: 'bold', color: item.net >= 0 ? C.ink : C.bad },
+    ]),
+    onNewPage: (d) => header(d, { title: 'Genel rapor', subtitle: 'Aylara göre (devam)' }),
+  });
+
+  sectionTitle(doc, 'Özet');
+  table(doc, {
+    columns: [{ label: 'Kalem', weight: 3 }, { label: 'Tutar', weight: 2, align: 'right' }],
+    rows: [
+      ['Kira beklenen', formatCurrency(t.rentExpected)],
+      [{ text: 'Kira tahsil edilen', font: 'semi' }, { text: formatCurrency(t.rentReceived), color: C.accent, font: 'semi' }],
+      ['Kira tahsilat oranı', '%' + t.rentRate],
+      ['Mülk gideri', { text: formatCurrency(t.expense), color: C.warn }],
+      [{ text: 'Otobüs hasılatı', font: 'semi' }, { text: formatCurrency(t.busGross), font: 'semi' }],
+      ['Otobüs gideri', { text: formatCurrency(t.busExpense), color: C.warn }],
+      ['Otobüs kalanı', { text: formatCurrency(t.busNet), color: t.busNet >= 0 ? C.ok : C.bad }],
+      ['Otobüs kâr marjı', '%' + t.busMargin],
+      ['İşlenen gün', String(t.busDays)],
+      [{ text: 'Birleşik net', font: 'bold' }, { text: formatCurrency(t.net), font: 'bold', color: t.net >= 0 ? C.ok : C.bad }],
+      ['Aylık ortalama net', formatCurrency(t.averageMonthly)],
+      t.bestMonth ? ['En iyi ay', t.bestMonth.label + ' · ' + formatCurrency(t.bestMonth.net)] : ['En iyi ay', '—'],
+    ],
+  });
+
+  const range = doc.bufferedPageRange();
+  for (let index = 0; index < range.count; index += 1) {
+    doc.switchToPage(range.start + index);
+    footer(doc, index + 1);
+  }
+
+  return doc;
+}
+
 /* Dönem raporu (kayan aralık) · A4 dikey */
 function buildRangeReportPdf(report) {
   const doc = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true });
@@ -649,6 +840,10 @@ function fileNameFor(kind, value, extra) {
   if (kind === 'month') {
     return 'vedat-gayrimenkul-' + value + '-' + String(extra).padStart(2, '0') + '.pdf';
   }
+  if (kind === 'bus') {
+    return 'otobus-hatti-' + value + '-' + String(extra).padStart(2, '0') + '.pdf';
+  }
+  if (kind === 'combined') return 'genel-rapor-son-' + value + '-ay.pdf';
   return 'vedat-gayrimenkul-son-' + value + '-ay.pdf';
 }
 
@@ -666,6 +861,8 @@ function pdfToBuffer(doc) {
 
 module.exports = {
   buildAnnualReportPdf,
+  buildBusMonthReportPdf,
+  buildCombinedReportPdf,
   buildMonthReportPdf,
   buildRangeReportPdf,
   fileNameFor,

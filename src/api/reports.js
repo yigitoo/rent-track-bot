@@ -3,9 +3,12 @@ require('dotenv').config();
 
 const connectDB = require('../db');
 const { requireWebAuth } = require('../utils/webAuth');
-const { annualReport, monthReport, rangeReport } = require('../services/reportData');
+const { annualReport, combinedReport, monthReport, rangeReport } = require('../services/reportData');
+const busService = require('../services/bus');
 const {
   buildAnnualReportPdf,
+  buildBusMonthReportPdf,
+  buildCombinedReportPdf,
   buildMonthReportPdf,
   buildRangeReportPdf,
   fileNameFor,
@@ -31,6 +34,21 @@ module.exports = async (req, res) => {
 
     const wantsPdf = String(req.query.format || '') === 'pdf';
     const scope = String(req.query.scope || 'range');
+
+    if (scope === 'bus') {
+      const { month, year } = parsePeriod(req.query);
+      const report = await busService.monthReport({ month, year, busId: String(req.query.busId || '') });
+      if (!wantsPdf) return res.status(200).json(report);
+      return streamPdf(res, buildBusMonthReportPdf(report), fileNameFor('bus', year, month));
+    }
+
+    if (scope === 'combined') {
+      const requested = Number(req.query.months);
+      const months = Number.isInteger(requested) && requested >= 3 && requested <= 24 ? requested : 12;
+      const report = await combinedReport(months);
+      if (!wantsPdf) return res.status(200).json(report);
+      return streamPdf(res, buildCombinedReportPdf(report), fileNameFor('combined', months));
+    }
 
     if (scope === 'month') {
       const { month, year } = parsePeriod(req.query);

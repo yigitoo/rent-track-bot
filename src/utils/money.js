@@ -87,6 +87,7 @@ const LIMITS = {
   payment: { min: 1, max: 5000000, label: 'Ödeme tutarı' },
   expense: { min: 1, max: 5000000, label: 'Gider tutarı' },
   due: { min: 1, max: 500000, label: 'Aidat tutarı' },
+  bus: { min: 0, max: 1000000, label: 'Tutar' },
 };
 
 /* Hata mesajı ne girildiğini de söyler: "45.000 yazdım ama 45 TL olmuş"

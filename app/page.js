@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   BellRinging,
   Buildings,
+  Bus,
   CalendarBlank,
   CalendarX,
   CaretLeft,
@@ -39,6 +40,8 @@ import {
 } from "@phosphor-icons/react";
 
 import CalendarBoard from "./components/Calendar";
+import BusBoard from "./components/BusBoard";
+import { BusDaySheet, BusSheet } from "./components/BusSheets";
 import DuesView from "./components/Dues";
 import MonthSheet from "./components/MonthSheet";
 import ExpensesView from "./components/Expenses";
@@ -87,6 +90,7 @@ const VIEWS = [
   { id: "payments", label: "Ödemeler", icon: Wallet, lead: "Dönem defteri: kim ödedi, kim gecikti.", primary: true },
   { id: "tenants", label: "Kiracılar", icon: UsersThree, lead: "Sözleşmeler, kira tutarları ve dosyalar.", primary: true },
   { id: "dues", label: "Aidat", icon: Buildings, lead: "Apartman ve site aidatı: hangi ay ödendi." },
+  { id: "bus", label: "Otobüs", icon: Bus, lead: "Hat defteri: gün gün hasılat, mazot, yövmiye." },
   { id: "expenses", label: "Giderler", icon: Receipt, lead: "Tamir, vergi, sigorta: net gelirin diğer yarısı." },
   { id: "reports", label: "Raporlar", icon: ChartLineUp, lead: "Aylara yayılan tahsilat, gider ve gündem." },
   { id: "activity", label: "Akış", icon: Pulse, lead: "Son kayıtlar ve bildirim geçmişi." },
@@ -777,6 +781,11 @@ export default function Page() {
   const [duesLoading, setDuesLoading] = useState(false);
   const [duesPending, setDuesPending] = useState("");
   const [duesStamp, setDuesStamp] = useState(0);
+  const [busPeriod, setBusPeriod] = useState({ month: 0, year: 0 });
+  const [busFilter, setBusFilter] = useState("");
+  const [busData, setBusData] = useState(null);
+  const [busLoading, setBusLoading] = useState(false);
+  const [busStamp, setBusStamp] = useState(0);
   const [modal, setModal] = useState(null);
   const [flash, setFlash] = useState(null);
   const [theme, setTheme] = useState("light");
@@ -798,6 +807,8 @@ export default function Page() {
   const [reportMode, setReportMode] = useState("range");
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
   const [annual, setAnnual] = useState(null);
+  const [busReport, setBusReport] = useState(null);
+  const [combined, setCombined] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
   const sentinelRef = useRef(null);
@@ -808,6 +819,7 @@ export default function Page() {
     setPeriod(currentPeriod());
     setGridYear(currentPeriod().year);
     setDuesYear(currentPeriod().year);
+    setBusPeriod(currentPeriod());
     setTheme(readTheme());
     setBooted(true);
 
@@ -920,12 +932,42 @@ export default function Page() {
     };
   }, [view, duesYear, duesStamp, token, signOut]);
 
+  // Otobüs defteri de yalnız kendi ekranında çekilir.
+  useEffect(() => {
+    if (view !== "bus" || !token || !busPeriod.year) return undefined;
+    let cancelled = false;
+    setBusLoading(true);
+    apiRequest(
+      "/api/bus?month=" + busPeriod.month + "&year=" + busPeriod.year + (busFilter ? "&busId=" + busFilter : ""),
+      {},
+      token
+    )
+      .then((payload) => {
+        if (!cancelled) setBusData(payload);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error.status === 401) signOut("Oturum süresi doldu, tekrar giriş yapın.");
+        else setFlash({ tone: "bad", message: error.message });
+      })
+      .finally(() => {
+        if (!cancelled) setBusLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, busPeriod.month, busPeriod.year, busFilter, busStamp, token, signOut]);
+
   // Rapor yalnız o ekran açıkken çekilir; ağır sorguyu boşuna çalıştırmaz.
   useEffect(() => {
     if (view !== "reports" || !token) return undefined;
     const url = reportMode === "annual"
       ? "/api/reports?scope=annual&year=" + reportYear
-      : "/api/reports?months=" + reportMonths;
+      : reportMode === "bus"
+        ? "/api/reports?scope=bus&month=" + busPeriod.month + "&year=" + busPeriod.year
+        : reportMode === "combined"
+          ? "/api/reports?scope=combined&months=" + reportMonths
+          : "/api/reports?months=" + reportMonths;
 
     let cancelled = false;
     setReportLoading(true);
@@ -933,6 +975,8 @@ export default function Page() {
       .then((payload) => {
         if (cancelled) return;
         if (reportMode === "annual") setAnnual(payload);
+        else if (reportMode === "bus") setBusReport(payload);
+        else if (reportMode === "combined") setCombined(payload);
         else setReport(payload);
       })
       .catch((error) => {
@@ -944,7 +988,7 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
-  }, [view, reportMode, reportMonths, reportYear, token, data]);
+  }, [view, reportMode, reportMonths, reportYear, busPeriod.month, busPeriod.year, busStamp, token, data]);
 
   // Düzenli kalemler yalnız gider ekranında gerekiyor.
   useEffect(() => {
@@ -1200,6 +1244,25 @@ export default function Page() {
     }
   }
 
+  function shiftBusPeriod(delta) {
+    const date = new Date(busPeriod.year, busPeriod.month - 1 + delta, 1);
+    setBusPeriod({ month: date.getMonth() + 1, year: date.getFullYear() });
+  }
+
+  /* Güne dokunulunca o günün kaydı varsa düzenlemeye, yoksa yeni kayda açılır.
+     Seçili araç varsa doğrudan onun kaydı gelir. */
+  function openBusDay(day) {
+    if (!busData) return;
+    if (!busData.buses.length) {
+      setModal({ type: "bus" });
+      setFlash({ tone: "bad", message: "Önce bir araç ekleyin; kâğıttaki numara yeterli." });
+      return;
+    }
+    const gun = busData.days.find((item) => item.day === day) || null;
+    const kayit = gun?.entries.find((item) => !busFilter || item.busId === busFilter) || gun?.entries[0] || null;
+    setModal({ type: "busday", day, entry: kayit });
+  }
+
   function exportPayments() {
     const names = new Map((data.statuses || []).map((item) => [item.tenant.id, item.tenant.name]));
     const rows = (data.payments || []).map((payment) => [
@@ -1228,14 +1291,19 @@ export default function Page() {
     try {
       const url = kind === "annual"
         ? "/api/reports?scope=annual&year=" + reportYear + "&format=pdf"
-        : "/api/reports?months=" + reportMonths + "&format=pdf";
-      await downloadFile(
-        url,
-        token,
-        kind === "annual"
-          ? "vedat-gayrimenkul-" + reportYear + "-yillik.pdf"
-          : "vedat-gayrimenkul-son-" + reportMonths + "-ay.pdf"
-      );
+        : kind === "bus"
+          ? "/api/reports?scope=bus&month=" + busPeriod.month + "&year=" + busPeriod.year + "&format=pdf"
+          : kind === "combined"
+            ? "/api/reports?scope=combined&months=" + reportMonths + "&format=pdf"
+            : "/api/reports?months=" + reportMonths + "&format=pdf";
+      const isim = kind === "annual"
+        ? "vedat-gayrimenkul-" + reportYear + "-yillik.pdf"
+        : kind === "bus"
+          ? "otobus-hatti-" + busPeriod.year + "-" + String(busPeriod.month).padStart(2, "0") + ".pdf"
+          : kind === "combined"
+            ? "genel-rapor-son-" + reportMonths + "-ay.pdf"
+            : "vedat-gayrimenkul-son-" + reportMonths + "-ay.pdf";
+      await downloadFile(url, token, isim);
       setFlash({ tone: "ok", message: "PDF indirildi." });
     } catch (error) {
       setFlash({ tone: "bad", message: error.message });
@@ -1533,6 +1601,19 @@ export default function Page() {
             />
           ) : null}
 
+          {view === "bus" ? (
+            <BusBoard
+              data={busData}
+              busy={busLoading}
+              onShiftPeriod={shiftBusPeriod}
+              onGoToday={() => setBusPeriod(currentPeriod())}
+              onSelectBus={setBusFilter}
+              onOpenDay={openBusDay}
+              onAddBus={() => setModal({ type: "bus" })}
+              onEditBus={(bus) => setModal({ type: "bus", bus })}
+            />
+          ) : null}
+
           {view === "expenses" ? (
             <ExpensesView
               data={data}
@@ -1577,6 +1658,10 @@ export default function Page() {
               onMode={setReportMode}
               report={report}
               annual={annual}
+              busReport={busReport}
+              combined={combined}
+              busPeriod={busPeriod}
+              onBusPeriod={shiftBusPeriod}
               months={reportMonths}
               year={reportYear}
               years={reportYears}
@@ -1734,6 +1819,35 @@ export default function Page() {
           onSaved={handleSaved}
         />
       ) : null}
+      {modal?.type === "busday" && busData ? (
+        <BusDaySheet
+          day={modal.day}
+          entry={modal.entry}
+          buses={busData.buses}
+          busId={busFilter}
+          month={busPeriod.month}
+          year={busPeriod.year}
+          token={token}
+          onClose={() => setModal(null)}
+          onSaved={async (message) => {
+            setModal(null);
+            setFlash({ tone: "ok", message });
+            setBusStamp((value) => value + 1);
+          }}
+        />
+      ) : null}
+      {modal?.type === "bus" ? (
+        <BusSheet
+          bus={modal.bus}
+          token={token}
+          onClose={() => setModal(null)}
+          onSaved={async (message) => {
+            setModal(null);
+            setFlash({ tone: "ok", message });
+            setBusStamp((value) => value + 1);
+          }}
+        />
+      ) : null}
       {modal?.type === "month" ? (
         <MonthSheet
           kind={modal.kind}
@@ -1813,6 +1927,7 @@ function screenId(value) {
     takvim: "calendar",
     odemeler: "payments",
     aidat: "dues",
+    otobus: "bus",
     giderler: "expenses",
     kiracilar: "tenants",
     raporlar: "reports",
