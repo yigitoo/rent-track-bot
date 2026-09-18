@@ -33,6 +33,7 @@ import {
   SquaresFour,
   Sun,
   TrendUp,
+  Trash,
   UsersThree,
   Wallet,
   WarningCircle,
@@ -61,14 +62,15 @@ import {
   apiRequest,
   clearSession,
   currentPeriod,
-  downloadCsv,
   downloadFile,
   formatCurrency,
   formatDate,
   formatShortDate,
   initials,
   loadSession,
+  matchesSearch,
   monthName,
+  normalizeSearch,
   periodLabel,
   readTheme,
   saveSession,
@@ -402,19 +404,21 @@ function OverviewView({ data, busy, onGoCalendar, onPay, onOpenTenant, onGoRepor
 
 /* ---------- Ödemeler ---------- */
 
-function PaymentsView({ data, busy, filter, onFilter, onPay, onDefer, onExport }) {
+function PaymentsView({ data, busy, filter, onFilter, onPay, onDefer, onExport, exportBusy, query = "" }) {
   const statuses = data.statuses || [];
   const metrics = data.metrics;
-  const filtered =
-    filter === "all"
-      ? statuses
-      : statuses.filter((item) => (item.paid ? filter === "paid" : item.status === filter));
+  const needle = normalizeSearch(query);
+  const filtered = statuses
+    .filter((item) => (filter === "all" ? true : item.paid ? filter === "paid" : item.status === filter))
+    .filter((item) => matchesSearch(needle, item.tenant.name, item.tenant.address));
 
   return (
-    <div className="view" data-busy={busy} aria-busy={busy}>
+    <div className="view payments-view" data-busy={busy} aria-busy={busy}>
       <div className="view-bar">
         <p className="view-summary">
-          {metrics.tenantCount} kiracı · {metrics.paidCount} tamamlandı · {metrics.overdueCount} geciken
+          {needle ? filtered.length + " / " + metrics.tenantCount + " kiracı eşleşti" : metrics.tenantCount + " kiracı"}
+          {" · "}
+          {metrics.paidCount} tamamlandı · {metrics.overdueCount} geciken
         </p>
         <div className="view-actions">
           <div className="filters glass glass--chip" role="group" aria-label="Durum filtresi">
@@ -432,9 +436,14 @@ function PaymentsView({ data, busy, filter, onFilter, onPay, onDefer, onExport }
               )
             )}
           </div>
-          <button className="btn btn-glass btn-sm" type="button" onClick={onExport}>
+          <button
+            className={"btn btn-glass btn-sm" + (exportBusy === "month-excel" ? " is-busy" : "")}
+            type="button"
+            onClick={onExport}
+            disabled={Boolean(exportBusy)}
+          >
             <DownloadSimple weight="bold" />
-            Dışa aktar
+            Excel indir
           </button>
           <button className="btn btn-primary btn-sm" type="button" onClick={() => onPay(null)}>
             <Plus weight="bold" />
@@ -480,9 +489,13 @@ function PaymentsView({ data, busy, filter, onFilter, onPay, onDefer, onExport }
           ))
         ) : (
           <Empty
-            icon={Wallet}
-            title="Bu filtrede kayıt yok"
-            hint="Başka bir durum seçin ya da yeni bir ödeme kaydedin."
+            icon={needle ? MagnifyingGlass : Wallet}
+            title={needle ? "“" + query.trim() + "” ile eşleşen kiracı yok" : "Bu filtrede kayıt yok"}
+            hint={
+              needle
+                ? "Adın yazılışını değiştirin ya da aramayı temizleyin."
+                : "Başka bir durum seçin ya da yeni bir ödeme kaydedin."
+            }
           />
         )}
       </div>
@@ -506,6 +519,7 @@ function TenantsView({
   onEdit,
   onArchive,
   onRestore,
+  onDeleteArchived,
   onOpen,
 }) {
   const normalize = (value) => value.toLocaleLowerCase("tr-TR");
@@ -553,6 +567,54 @@ function TenantsView({
           </button>
         </div>
       </div>
+
+      {/* Arşiv listenin üstünde açılır: altta kalınca 35 satırın ardında görünmüyordu. */}
+      {showArchived ? (
+        <div className="archive-block">
+          <p className="strip-title">Arşiv</p>
+          <div className="rows">
+            {archivedLoading ? (
+              <p className="chips-empty">Arşiv yükleniyor…</p>
+            ) : visibleArchived.length ? (
+              visibleArchived.map((tenant, index) => (
+                <article className="row glass glass--quiet is-muted" key={tenant.id} style={{ "--i": index }}>
+                  <div className="who">
+                    <span className="avatar">{initials(tenant.name)}</span>
+                    <div className="who-copy">
+                      <strong>{tenant.name}</strong>
+                      <span>{tenant.address}</span>
+                    </div>
+                  </div>
+                  <div className="row-status">
+                    <span className="pill pill-calm"><Archive weight="fill" />Arşivde</span>
+                  </div>
+                  <div className="row-money">
+                    <strong className="num">{formatCurrency(tenant.rentAmount)}</strong>
+                    <span>son kira</span>
+                  </div>
+                  <div className="row-actions">
+                    <button className="btn btn-glass btn-sm" type="button" onClick={() => onRestore(tenant)}>
+                      <ArrowCounterClockwise weight="bold" />
+                      Geri al
+                    </button>
+                    <button
+                      className="btn btn-quiet btn-sm is-danger"
+                      type="button"
+                      onClick={() => onDeleteArchived(tenant)}
+                      aria-label={tenant.name + " kiracısını temelli sil"}
+                    >
+                      <Trash weight="bold" />
+                      Temelli sil
+                    </button>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p className="chips-empty">Arşivde kayıt yok.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <div className="rows">
         {visible.length ? (
@@ -620,43 +682,6 @@ function TenantsView({
         )}
       </div>
 
-      {showArchived ? (
-        <div className="archive-block">
-          <p className="strip-title">Arşiv</p>
-          <div className="rows">
-            {archivedLoading ? (
-              <p className="chips-empty">Arşiv yükleniyor…</p>
-            ) : visibleArchived.length ? (
-              visibleArchived.map((tenant, index) => (
-                <article className="row glass glass--quiet is-muted" key={tenant.id} style={{ "--i": index }}>
-                  <div className="who">
-                    <span className="avatar">{initials(tenant.name)}</span>
-                    <div className="who-copy">
-                      <strong>{tenant.name}</strong>
-                      <span>{tenant.address}</span>
-                    </div>
-                  </div>
-                  <div className="row-status">
-                    <span className="pill pill-calm"><Archive weight="fill" />Arşivde</span>
-                  </div>
-                  <div className="row-money">
-                    <strong className="num">{formatCurrency(tenant.rentAmount)}</strong>
-                    <span>son kira</span>
-                  </div>
-                  <div className="row-actions">
-                    <button className="btn btn-glass btn-sm" type="button" onClick={() => onRestore(tenant)}>
-                      <ArrowCounterClockwise weight="bold" />
-                      Geri al
-                    </button>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className="chips-empty">Arşivde kayıt yok.</p>
-            )}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -771,6 +796,7 @@ export default function Page() {
   const [view, setView] = useState("overview");
   const [filter, setFilter] = useState("all");
   const [paymentTab, setPaymentTab] = useState("grid");
+  const [paymentQuery, setPaymentQuery] = useState("");
   const [gridYear, setGridYear] = useState(0);
   const [grid, setGrid] = useState(null);
   const [gridLoading, setGridLoading] = useState(false);
@@ -803,12 +829,15 @@ export default function Page() {
   const [recurrences, setRecurrences] = useState([]);
   const [report, setReport] = useState(null);
   const [reportMonths, setReportMonths] = useState(12);
+  const [reportStartDate, setReportStartDate] = useState("");
+  const [reportEndDate, setReportEndDate] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [reportMode, setReportMode] = useState("range");
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
   const [annual, setAnnual] = useState(null);
   const [busReport, setBusReport] = useState(null);
   const [combined, setCombined] = useState(null);
+  const [paymentExportBusy, setPaymentExportBusy] = useState("");
   const [downloading, setDownloading] = useState(false);
 
   const sentinelRef = useRef(null);
@@ -957,17 +986,24 @@ export default function Page() {
       cancelled = true;
     };
   }, [view, busPeriod.month, busPeriod.year, busFilter, busStamp, token, signOut]);
-
-  // Rapor yalnız o ekran açıkken çekilir; ağır sorguyu boşuna çalıştırmaz.
   useEffect(() => {
     if (view !== "reports" || !token) return undefined;
+    const hasCustomRange = Boolean(reportStartDate || reportEndDate);
+    if (reportMode === "range" && hasCustomRange && (!reportStartDate || !reportEndDate)) {
+      setReportLoading(false);
+      return undefined;
+    }
+
+    const customRangeQuery = reportMode === "range" && reportStartDate && reportEndDate
+      ? "&start=" + encodeURIComponent(reportStartDate) + "&end=" + encodeURIComponent(reportEndDate)
+      : "";
     const url = reportMode === "annual"
       ? "/api/reports?scope=annual&year=" + reportYear
       : reportMode === "bus"
         ? "/api/reports?scope=bus&month=" + busPeriod.month + "&year=" + busPeriod.year
         : reportMode === "combined"
           ? "/api/reports?scope=combined&months=" + reportMonths
-          : "/api/reports?months=" + reportMonths;
+          : "/api/reports?months=" + reportMonths + customRangeQuery;
 
     let cancelled = false;
     setReportLoading(true);
@@ -988,7 +1024,19 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
-  }, [view, reportMode, reportMonths, reportYear, busPeriod.month, busPeriod.year, busStamp, token, data]);
+  }, [
+    view,
+    reportMode,
+    reportMonths,
+    reportStartDate,
+    reportEndDate,
+    reportYear,
+    busPeriod.month,
+    busPeriod.year,
+    busStamp,
+    token,
+    data,
+  ]);
 
   // Düzenli kalemler yalnız gider ekranında gerekiyor.
   useEffect(() => {
@@ -1100,6 +1148,24 @@ export default function Page() {
     try {
       await apiRequest("/api/tenants?id=" + tenant.id + "&action=restore", { method: "PATCH" }, token);
       setFlash({ tone: "ok", message: tenant.name + " arşivden çıkarıldı." });
+      await loadArchived();
+      await reload();
+    } catch (error) {
+      setFlash({ tone: "bad", message: error.message });
+    }
+  }
+
+  async function deleteArchivedTenant(tenant) {
+    if (!window.confirm(
+      tenant.name + " ve tüm ödeme, gider ve aidat geçmişi kalıcı olarak silinsin mi? Bu işlem geri alınamaz."
+    )) return;
+    try {
+      await apiRequest(
+        "/api/tenants?id=" + tenant.id + "&action=purge",
+        { method: "DELETE" },
+        token
+      );
+      setFlash({ tone: "ok", message: tenant.name + " ve ilişkili kayıtları kalıcı olarak silindi." });
       await loadArchived();
       await reload();
     } catch (error) {
@@ -1264,46 +1330,83 @@ export default function Page() {
   }
 
   function exportPayments() {
-    const names = new Map((data.statuses || []).map((item) => [item.tenant.id, item.tenant.name]));
-    const rows = (data.payments || []).map((payment) => [
-      payment.tenantName || names.get(payment.tenantId) || "Bilinmiyor",
-      payment.amount,
-      formatDate(payment.date),
-      periodLabel({ month: payment.month, year: payment.year }),
-      payment.note || "",
-    ]);
-
-    if (!rows.length) {
-      setFlash({ tone: "bad", message: "Bu dönemde dışa aktarılacak ödeme yok." });
-      return;
-    }
-
-    downloadCsv(
-      "vedat-gayrimenkul-" + data.period.year + "-" + String(data.period.month).padStart(2, "0") + ".csv",
-      ["Kiracı", "Tutar", "Ödeme tarihi", "Dönem", "Not"],
-      rows
-    );
-    setFlash({ tone: "ok", message: rows.length + " kayıt dışa aktarıldı." });
+    return exportPaymentMonth(data.period.month, data.period.year);
   }
+
+  async function exportPaymentMonth(month, year, format = "xlsx") {
+    const pdf = format === "pdf";
+    const busyKey = pdf ? "month-pdf" : "month-excel";
+    const fileFormat = pdf ? "pdf" : "xlsx";
+    const extension = pdf ? "pdf" : "xlsx";
+    const monthLabel = MONTH_LONG[month - 1] + " " + year;
+    setPaymentExportBusy(busyKey);
+    try {
+      await downloadFile(
+        "/api/reports?scope=month&month=" + month + "&year=" + year + "&format=" + fileFormat,
+        token,
+        "vedat-gayrimenkul-" + year + "-" + String(month).padStart(2, "0") + "-aylik." + extension
+      );
+      setFlash({ tone: "ok", message: monthLabel + " " + (pdf ? "PDF" : "Excel") + " indirildi." });
+    } catch (error) {
+      if (error.status === 401) signOut("Oturum süresi doldu, tekrar giriş yapın.");
+      else setFlash({ tone: "bad", message: error.message });
+    } finally {
+      setPaymentExportBusy("");
+    }
+  }
+
+  async function exportPaymentYear(year, format) {
+    const pdf = format === "pdf";
+    const busyKey = pdf ? "year-pdf" : "year-excel";
+    const fileFormat = pdf ? "pdf" : "xlsx";
+    const extension = pdf ? "pdf" : "xlsx";
+    setPaymentExportBusy(busyKey);
+    try {
+      await downloadFile(
+        "/api/reports?scope=annual&year=" + year + "&format=" + fileFormat,
+        token,
+        "vedat-gayrimenkul-" + year + "-yillik." + extension
+      );
+      setFlash({ tone: "ok", message: year + " " + (pdf ? "PDF" : "Excel") + " indirildi." });
+    } catch (error) {
+      if (error.status === 401) signOut("Oturum süresi doldu, tekrar giriş yapın.");
+      else setFlash({ tone: "bad", message: error.message });
+    } finally {
+      setPaymentExportBusy("");
+    }
+  }
+
 
   async function downloadReportPdf(kind) {
     setDownloading(true);
     try {
-      const url = kind === "annual"
-        ? "/api/reports?scope=annual&year=" + reportYear + "&format=pdf"
-        : kind === "bus"
-          ? "/api/reports?scope=bus&month=" + busPeriod.month + "&year=" + busPeriod.year + "&format=pdf"
-          : kind === "combined"
-            ? "/api/reports?scope=combined&months=" + reportMonths + "&format=pdf"
-            : "/api/reports?months=" + reportMonths + "&format=pdf";
-      const isim = kind === "annual"
-        ? "vedat-gayrimenkul-" + reportYear + "-yillik.pdf"
-        : kind === "bus"
-          ? "otobus-hatti-" + busPeriod.year + "-" + String(busPeriod.month).padStart(2, "0") + ".pdf"
-          : kind === "combined"
-            ? "genel-rapor-son-" + reportMonths + "-ay.pdf"
-            : "vedat-gayrimenkul-son-" + reportMonths + "-ay.pdf";
-      await downloadFile(url, token, isim);
+      const customRange = kind === "range" && reportStartDate && reportEndDate;
+      let url;
+      let fileName;
+
+      if (kind === "annual") {
+        url = "/api/reports?scope=annual&year=" + reportYear + "&format=pdf";
+        fileName = "vedat-gayrimenkul-" + reportYear + "-yillik.pdf";
+      } else if (kind === "bus") {
+        url = "/api/reports?scope=bus&month=" + busPeriod.month + "&year=" + busPeriod.year + "&format=pdf";
+        fileName = "otobus-hatti-" + busPeriod.year + "-" + String(busPeriod.month).padStart(2, "0") + ".pdf";
+      } else if (kind === "combined") {
+        url = "/api/reports?scope=combined&months=" + reportMonths + "&format=pdf";
+        fileName = "genel-rapor-son-" + reportMonths + "-ay.pdf";
+      } else if (customRange) {
+        url =
+          "/api/reports?start=" +
+          encodeURIComponent(reportStartDate) +
+          "&end=" +
+          encodeURIComponent(reportEndDate) +
+          "&format=pdf";
+        fileName = "vedat-gayrimenkul-" + reportStartDate + "-" + reportEndDate + ".pdf";
+      } else {
+        url = "/api/reports?months=" + reportMonths + "&format=pdf";
+        fileName = "vedat-gayrimenkul-son-" + reportMonths + "-ay.pdf";
+      }
+
+      await downloadFile(url, token, fileName);
       setFlash({ tone: "ok", message: "PDF indirildi." });
     } catch (error) {
       setFlash({ tone: "bad", message: error.message });
@@ -1461,7 +1564,7 @@ export default function Page() {
 
             <div className="topbar-actions">
               {showPeriod ? (
-                <div className="period glass glass--chip">
+                <div className="period glass glass--chip topbar-period">
                   <button type="button" onClick={() => shiftPeriod(-1)} aria-label="Önceki dönem">
                     <CaretLeft weight="bold" />
                   </button>
@@ -1474,7 +1577,7 @@ export default function Page() {
 
               {installPrompt ? (
                 <button
-                  className="btn btn-glass btn-sm"
+                  className="btn btn-glass btn-sm topbar-upload"
                   type="button"
                   onClick={async () => {
                     await installPrompt.prompt();
@@ -1487,7 +1590,7 @@ export default function Page() {
               ) : null}
 
               <button
-                className={"icon-btn" + (view === "settings" ? " is-active" : "")}
+                className={"icon-btn topbar-settings" + (view === "settings" ? " is-active" : "")}
                 type="button"
                 onClick={() => goTo("settings")}
                 aria-label="Ayarlar"
@@ -1495,17 +1598,17 @@ export default function Page() {
                 <GearSix weight={view === "settings" ? "fill" : "bold"} />
               </button>
               <button
-                className="icon-btn"
+                className="icon-btn topbar-theme"
                 type="button"
                 onClick={toggleTheme}
                 aria-label={theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"}
               >
                 {theme === "dark" ? <Sun weight="fill" /> : <Moon weight="fill" />}
               </button>
-              <button className="icon-btn" type="button" onClick={reload} aria-label="Verileri yenile">
+              <button className="icon-btn topbar-refresh" type="button" onClick={reload} aria-label="Verileri yenile">
                 <ArrowClockwise weight="bold" />
               </button>
-              <button className="icon-btn" type="button" onClick={() => signOut("")} aria-label="Çıkış yap">
+              <button className="icon-btn topbar-signout" type="button" onClick={() => signOut("")} aria-label="Çıkış yap">
                 <SignOut weight="bold" />
               </button>
             </div>
@@ -1560,6 +1663,16 @@ export default function Page() {
                     Dönem defteri
                   </button>
                 </div>
+                <div className="search glass glass--chip">
+                  <MagnifyingGlass weight="bold" />
+                  <input
+                    type="search"
+                    value={paymentQuery}
+                    placeholder="Kiracı adı ara"
+                    aria-label="Ödemelerde kiracı ara"
+                    onChange={(event) => setPaymentQuery(event.target.value)}
+                  />
+                </div>
               </div>
 
               {paymentTab === "grid" ? (
@@ -1572,6 +1685,10 @@ export default function Page() {
                   onOpenTenant={openTenantById}
                   onPay={(tenantId) => setModal({ type: "payment", tenantId })}
                   onDefer={(tenantId) => setModal({ type: "defer", tenantId })}
+                  onExportMonth={exportPaymentMonth}
+                  onExportYear={exportPaymentYear}
+                  exportBusy={paymentExportBusy}
+                  query={paymentQuery}
                 />
               ) : (
                 <PaymentsView
@@ -1582,6 +1699,8 @@ export default function Page() {
                   onPay={(tenantId) => setModal({ type: "payment", tenantId })}
                   onDefer={(tenantId) => setModal({ type: "defer", tenantId })}
                   onExport={exportPayments}
+                  exportBusy={paymentExportBusy}
+                  query={paymentQuery}
                 />
               )}
             </>
@@ -1648,6 +1767,7 @@ export default function Page() {
               onEdit={(tenant) => setModal({ type: "tenant", mode: "edit", tenant })}
               onArchive={archiveTenant}
               onRestore={restoreTenant}
+              onDeleteArchived={deleteArchivedTenant}
               onOpen={(tenant) => setModal({ type: "detail", tenant })}
             />
           ) : null}
@@ -1663,12 +1783,23 @@ export default function Page() {
               busPeriod={busPeriod}
               onBusPeriod={shiftBusPeriod}
               months={reportMonths}
+              startDate={reportStartDate}
+              endDate={reportEndDate}
               year={reportYear}
               years={reportYears}
               busy={reportLoading}
               downloading={downloading}
-              onRange={setReportMonths}
-              onYear={setReportYear}
+              onRange={(value) => {
+                setReportMonths(value);
+                setReportStartDate("");
+                setReportEndDate("");
+              }}
+              onStartDate={setReportStartDate}
+              onEndDate={setReportEndDate}
+              onClearRange={() => {
+                setReportStartDate("");
+                setReportEndDate("");
+              }}
               onPdf={downloadReportPdf}
               onSelectMonth={(item) => {
                 setPeriod({ month: item.month, year: item.year });

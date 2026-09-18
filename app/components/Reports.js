@@ -57,7 +57,7 @@ function AnnualView({ annual, year, years, busy, downloading, onYear, onPdf, onO
     downloadCsv(
       "vedat-gayrimenkul-" + annual.year + "-yillik.csv",
       ["Kiracı", "Dahil olduğu ay", ...MONTH_SHORT, "Beklenen", "Tahsil edilen", "Oran"],
-      annual.rows.map((row) => [
+      annual.rows.filter((row) => !row.archived).map((row) => [
         row.name,
         row.startLabel,
         ...row.cells.map((cell) => CELL_LABEL[cell.state].title),
@@ -307,13 +307,45 @@ function AnnualView({ annual, year, years, busy, downloading, onYear, onPdf, onO
 
 /* ---------- Kayan dönem ---------- */
 
-function RangeView({ report, months, busy, downloading, onRange, onSelectMonth, onOpenTenant, onPdf }) {
+function reportDateLabel(value) {
+  if (!value) return "";
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(year, month - 1, day));
+}
+
+function RangeView({
+  report,
+  months,
+  startDate = "",
+  endDate = "",
+  busy,
+  downloading,
+  onRange,
+  onStartDate,
+  onEndDate,
+  onClearRange,
+  onSelectMonth,
+  onOpenTenant,
+  onPdf,
+}) {
   if (!report) return <Loading label="Rapor hazırlanıyor" />;
   const totals = report.totals;
+  const customRange = Boolean(startDate && endDate);
+  const incompleteRange = Boolean(startDate || endDate) && !customRange;
+  const rangeLabel = customRange
+    ? reportDateLabel(startDate) + " – " + reportDateLabel(endDate)
+    : "Son " + report.months + " ay";
 
   function exportSeries() {
+    const fileName = customRange
+      ? "vedat-gayrimenkul-" + startDate + "-" + endDate + ".csv"
+      : "vedat-gayrimenkul-son-" + report.months + "-ay.csv";
     downloadCsv(
-      "vedat-gayrimenkul-son-" + report.months + "-ay.csv",
+      fileName,
       ["Dönem", "Beklenen", "Tahsil edilen", "Gider", "Net", "Tahsilat oranı"],
       report.series.map((item) => [item.label, item.expected, item.received, item.expense, item.net, item.rate + "%"])
     );
@@ -323,7 +355,7 @@ function RangeView({ report, months, busy, downloading, onRange, onSelectMonth, 
     <div className="view" data-busy={busy} aria-busy={busy}>
       <div className="view-bar">
         <p className="view-summary">
-          Son {report.months} ay · {formatCurrency(totals.received)} tahsilat · net {formatCurrency(totals.net)}
+          {rangeLabel} · {formatCurrency(totals.received)} tahsilat · net {formatCurrency(totals.net)}
         </p>
         <div className="view-actions">
           <div className="filters glass glass--chip" role="group" aria-label="Rapor aralığı">
@@ -331,14 +363,42 @@ function RangeView({ report, months, busy, downloading, onRange, onSelectMonth, 
               <button
                 key={value}
                 type="button"
-                className={"filter" + (months === value ? " is-active" : "")}
+                className={"filter" + (!customRange && months === value ? " is-active" : "")}
                 onClick={() => onRange(value)}
               >
                 {label}
               </button>
             ))}
           </div>
-          <button className="btn btn-glass btn-sm" type="button" onClick={exportSeries}>
+          <div className="report-date-range" aria-label="Özel tarih aralığı">
+            <label className="report-date-field">
+              <span>Başlangıç</span>
+              <input
+                type="date"
+                value={startDate}
+                max={endDate || undefined}
+                onChange={(event) => onStartDate(event.target.value)}
+                aria-label="Rapor başlangıç tarihi"
+              />
+            </label>
+            <span className="report-date-separator" aria-hidden="true">→</span>
+            <label className="report-date-field">
+              <span>Bitiş</span>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(event) => onEndDate(event.target.value)}
+                aria-label="Rapor bitiş tarihi"
+              />
+            </label>
+            {startDate || endDate ? (
+              <button className="btn btn-quiet btn-sm report-date-clear" type="button" onClick={onClearRange}>
+                Temizle
+              </button>
+            ) : null}
+          </div>
+          <button className="btn btn-glass btn-sm" type="button" onClick={exportSeries} disabled={incompleteRange}>
             <DownloadSimple weight="bold" />
             CSV
           </button>
@@ -346,6 +406,7 @@ function RangeView({ report, months, busy, downloading, onRange, onSelectMonth, 
             className={"btn btn-primary btn-sm" + (downloading ? " is-busy" : "")}
             type="button"
             onClick={() => onPdf("range")}
+            disabled={incompleteRange}
           >
             <FilePdf weight="bold" />
             PDF indir

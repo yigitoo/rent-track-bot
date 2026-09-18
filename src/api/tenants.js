@@ -2,8 +2,11 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 
 const connectDB = require('../db');
-const Tenant = require('../models/tenant');
 const { requireWebAuth } = require('../utils/webAuth');
+const Tenant = require('../models/tenant');
+const Payment = require('../models/payment');
+const Expense = require('../models/expense');
+const Recurrence = require('../models/recurrence');
 const {
   notifyRentIncreased,
   notifyTenantArchived,
@@ -147,6 +150,38 @@ module.exports = async (req, res) => {
       await tenant.save();
       const notification = await notifyRentIncreased(tenant, raise);
       return res.status(200).json({ tenant: serializeTenant(tenant), notification });
+    }
+
+    if (req.method === 'DELETE' && action === 'purge') {
+      if (tenant.isActive) {
+        return res.status(400).json({ error: 'Aktif kiracı önce arşivlenmeli.' });
+      }
+
+      const recurrenceIds = await Recurrence.distinct('_id', { tenant: tenant._id });
+      const [payments, expenses, recurrences] = await Promise.all([
+        Payment.deleteMany({ tenant: tenant._id }),
+        Expense.deleteMany({
+          $or: [
+            { tenant: tenant._id },
+            { recurrence: { $in: recurrenceIds } },
+          ],
+        }),
+        Recurrence.deleteMany({ tenant: tenant._id }),
+      ]);
+      const tenantResult = await Tenant.deleteOne({ _id: tenant._id, isActive: false });
+      if (tenantResult.deletedCount !== 1) {
+        throw new Error('Arşivdeki kiracı silinemedi.');
+      }
+
+      return res.status(200).json({
+        ok: true,
+        id,
+        deleted: {
+          payments: payments.deletedCount,
+          expenses: expenses.deletedCount,
+          recurrences: recurrences.deletedCount,
+        },
+      });
     }
 
     if (req.method === 'DELETE') {

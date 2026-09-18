@@ -30,6 +30,73 @@ function monthKeys(count, reference = now()) {
   return keys;
 }
 
+function reportDateError(message) {
+  const error = new Error(message);
+  error.code = 'INVALID_REPORT_RANGE';
+  return error;
+}
+
+function parseDateOnly(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw reportDateError('Başlangıç ve bitiş tarihleri YYYY-AA-GG biçiminde olmalı.');
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setHours(0, 0, 0, 0);
+  if (
+    year < 2000
+    || year > 2100
+    || date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) {
+    throw reportDateError('Geçerli bir tarih aralığı seçin.');
+  }
+
+  return { key: value, date };
+}
+
+function parseDateRange(startValue, endValue) {
+  const hasStart = startValue !== undefined && startValue !== null && String(startValue).trim() !== '';
+  const hasEnd = endValue !== undefined && endValue !== null && String(endValue).trim() !== '';
+  if (!hasStart && !hasEnd) return null;
+  if (!hasStart || !hasEnd) {
+    throw reportDateError('Başlangıç ve bitiş tarihlerini birlikte seçin.');
+  }
+
+  const start = parseDateOnly(startValue);
+  const end = parseDateOnly(endValue);
+  if (start.date > end.date) {
+    throw reportDateError('Bitiş tarihi başlangıç tarihinden önce olamaz.');
+  }
+
+  const endExclusive = new Date(end.date);
+  endExclusive.setDate(endExclusive.getDate() + 1);
+
+  return {
+    start: start.date,
+    end: end.date,
+    endExclusive,
+    startKey: start.key,
+    endKey: end.key,
+  };
+}
+
+function monthKeysBetween(startDate, endDate) {
+  const startIndex = startDate.getFullYear() * 12 + startDate.getMonth();
+  const endIndex = endDate.getFullYear() * 12 + endDate.getMonth();
+  const count = endIndex - startIndex + 1;
+  if (count < 1 || count > 120) {
+    throw reportDateError('Rapor aralığı en fazla 10 yıl olabilir.');
+  }
+
+  return Array.from({ length: count }, (_, index) => {
+    const shifted = new Date(startDate.getFullYear(), startDate.getMonth() + index, 1);
+    return { month: shifted.getMonth() + 1, year: shifted.getFullYear() };
+  });
+}
+
 function buildSeries({ months, tenants, payments, expenses }) {
   const paymentTotals = new Map();
   for (const payment of payments) {
@@ -207,6 +274,7 @@ function buildAnnual({ year, tenants, payments, expenses, reference = now().toDa
       tenantId: id,
       name: tenant.name,
       address: tenant.address,
+      archived: tenant.isActive === false,
       rentAmount: tenant.rentAmount,
       startDate: startDate ? startDate.toISOString() : null,
       startLabel: startDate
@@ -367,5 +435,7 @@ module.exports = {
   buildTenantBreakdown,
   buildYearGrid,
   monthKeys,
+  monthKeysBetween,
+  parseDateRange,
   rentAtMonth,
 };

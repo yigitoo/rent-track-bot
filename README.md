@@ -19,7 +19,8 @@ döneme dokunmak kalanı tamamlar, tam ödenmiş bir döneme dokunmak işareti
 kaldırır. Kutucuklar telefonda ve tablette parmakla vurulacak boyda kalır
 (12 → 6 → 4 → 3 sütun). İşaret anında takvime, özete ve raporlara yansır.
 *Dönem defteri*: eski aylık liste, durum filtreleri, tek tuşla tahsilat ve
-erteleme. İkisi de CSV olarak dışa aktarılır.
+erteleme. Aylık/yıllık görünümler biçimlendirilmiş Excel ve PDF olarak dışa
+aktarılır; arşivdeki kiracılar dışa aktarımlara dahil edilmez.
 
 **Aidat** · Apartman ve site aidatının 12 aylık takibi. Her aidat kalemi için
 Ocak'tan Aralık'a bir kutucuk; işaretlediğiniz ay o dönemin gider kaydına
@@ -41,13 +42,15 @@ hesabı; her ayın belirli gününde otomatik oluşan **düzenli giderler**
 
 **Kiracılar** · Sözleşme tarihleri, depozito, yıllık artış oranı, telefon,
 e-posta ve not. Kiracı dosyasında ödeme geçmişi (silinebilir), kira geçmişi ve
-oran ya da tutar üzerinden **kira artışı** uygulama. Arama ve arşiv.
+oran ya da tutar üzerinden **kira artışı** uygulama. Arama, arşiv ve arşivlenen
+kiracıyı ilişkili geçmişiyle birlikte kalıcı silme.
 
 **Raporlar** · Dört mod. *Kira dönemi* ve *Kira yıllık* mülk tarafını,
 *Otobüs* hat defterinin ay sonu dökümünü, *Genel* ise ikisini tek tabloda
 birleştirir (kira tahsilatı + otobüs kalanı − giderler = birleşik net).
-Hepsi CSV ve PDF olarak iner. Ayrıntı: *Dönem*: 6/12/24 aylık tahsilat–gider–net serisi,
-kiracı bazında performans, gider kategorileri, sözleşme ve zam gündemi.
+Hepsi CSV ve PDF olarak iner. Ayrıntı: *Dönem*: 6/12/24 aylık tahsilat–gider–net
+serisi veya başlangıç/bitiş günü seçilerek özel tarih aralığı; kiracı bazında
+performans, gider kategorileri, sözleşme ve zam gündemi.
 *Yıllık*: kiracı × ay tablosu — her kiracının portföye **dahil olduğu ay**
 işaretlenir (◆), öncesi "kiracı değil" olarak boş kalır; ay ay ödendi / eksik /
 ödenmedi durumu görünür. İkisi de CSV ve **logolu, markalı PDF** olarak

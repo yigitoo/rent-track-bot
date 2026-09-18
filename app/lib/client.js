@@ -204,3 +204,14 @@ export async function downloadFile(url, token, fallbackName) {
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
 }
+
+/* Arama tek kurala bağlı: Türkçe küçültme olmadan "İzzet" yazan kutu
+   "izzet" kaydını bulamıyor. */
+export function normalizeSearch(value = "") {
+  return String(value).toLocaleLowerCase("tr-TR").trim();
+}
+
+export function matchesSearch(needle, ...fields) {
+  if (!needle) return true;
+  return fields.some((field) => normalizeSearch(field).includes(needle));
+}

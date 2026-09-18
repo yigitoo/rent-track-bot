@@ -333,6 +333,8 @@ button { cursor: pointer; }
 
 .btn-quiet { --btn-fg: var(--text-2); --btn-line: transparent; }
 .btn-quiet:hover { background: var(--accent-soft); color: var(--text); }
+.btn.is-danger { --btn-fg: var(--bad); --btn-line: transparent; }
+.btn.is-danger:hover { background: var(--bad-soft); color: var(--bad); }
 
 .btn-sm { min-height: 34px; padding: 0 var(--a-3); font-size: 13px; border-radius: var(--r-1); }
 .btn-wide { width: 100%; }
@@ -572,8 +574,8 @@ button { cursor: pointer; }
   padding-left: max(clamp(16px, 3vw, 40px), env(safe-area-inset-left));
   padding-right: max(clamp(16px, 3vw, 40px), env(safe-area-inset-right));
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--a-6);
-  align-content: start;
 }
 
 /* Üst şerit: içerik altından akar */
@@ -581,10 +583,12 @@ button { cursor: pointer; }
   position: sticky;
   top: 0;
   z-index: 30;
+  overflow: hidden;
+  border-radius: var(--r-3);
   display: flex;
   align-items: center;
   gap: var(--a-3);
-  margin: calc(var(--a-6) * -1) clamp(-16px, -3vw, -40px) 0;
+  margin: calc(var(--a-6) * -1) calc(clamp(16px, 3vw, 40px) * -1) 0;
   padding: var(--a-3) clamp(16px, 3vw, 40px);
   border-bottom: 1px solid transparent;
   /* Yapışkan başlık her zaman bulanıklaştırır: altından kayan içerik
@@ -640,7 +644,7 @@ button { cursor: pointer; }
 
 /* ---------- 8. Bölüm başlığı ---------- */
 
-.view { display: grid; gap: var(--a-6); animation: rise var(--t-mid) var(--ease) both; }
+.view { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--a-6); animation: rise var(--t-mid) var(--ease) both; }
 
 .view-bar {
   display: flex;
@@ -1645,7 +1649,15 @@ button { cursor: pointer; }
 
 /* ---------- 19d. Yıllık rapor tablosu ---------- */
 
-.mode-switch { display: flex; margin-bottom: calc(var(--a-6) * -1 + var(--a-2)); }
+.mode-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--a-2);
+  flex-wrap: wrap;
+  margin-bottom: calc(var(--a-6) * -1 + var(--a-2));
+}
+/* Arama sekmelerin karşı ucunda durur; iki sekme de aynı kutuyu kullanır. */
+.mode-switch .search { margin-left: auto; }
 
 .matrix-legend {
   display: flex;
@@ -1809,10 +1821,48 @@ button { cursor: pointer; }
 .pg-key.state-pending { color: var(--text-3); }
 .pg-hint { margin-left: auto; }
 
-.pg-list { display: grid; gap: var(--a-3); }
+.pg-toolbar-actions { min-width: 0; }
+.pg-month-export {
+  display: flex;
+  align-items: center;
+  gap: var(--a-2);
+  min-width: 0;
+}
+.pg-month-actions { display: flex; align-items: center; gap: var(--a-2); min-width: 0; }
+.pg-month-picker { display: inline-flex; min-width: 0; }
+.pg-month-picker select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 112px;
+  min-height: 34px;
+  padding: 0 var(--a-7) 0 var(--a-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-1);
+  background-color: var(--solid);
+  background-image: var(--select-arrow);
+  background-position: right 10px center;
+  background-size: 14px 14px;
+  background-repeat: no-repeat;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pg-month-picker select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.pg-year-export { display: flex; align-items: center; gap: var(--a-2); flex-wrap: wrap; }
+.pg-year-export .btn,
+.pg-month-export .btn { white-space: nowrap; }
+
+.pg-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--a-3); }
 
 .pg-card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--a-3);
   padding: var(--a-4);
   border-radius: var(--r-3);
@@ -1956,9 +2006,15 @@ button { cursor: pointer; }
 
   .pg-card { padding: var(--a-3); gap: var(--a-3); }
   .pg-head { gap: var(--a-3); }
-  .pg-figures { width: 100%; margin-left: 0; justify-content: space-between; }
-  .pg-money { text-align: left; }
-  .pg-actions .btn { min-height: 40px; }
+  .pg-figures {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+  .pg-money { min-width: 0; text-align: left; }
+  .pg-actions { min-width: 0; flex-wrap: wrap; }
+  .pg-actions .btn { min-height: 40px; padding-inline: var(--a-2); }
   .pg-go { opacity: 1; transform: none; }
   .pg-hint { margin-left: 0; width: 100%; }
   .pg-track-note { white-space: normal; }
@@ -1970,6 +2026,9 @@ button { cursor: pointer; }
 
 @media (max-width: 400px) {
   .pg-months { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pg-figures { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .pg-money { width: 100%; }
+  .pg-actions { width: 100%; justify-content: flex-start; }
 }
 
 /* Duraklatılmış aidat kalemi: kutucukları hâlâ tıklanır, kartı sönük. */
@@ -2050,6 +2109,7 @@ button { cursor: pointer; }
   .mode-switch { margin-bottom: 0; }
   .mode-switch .filters { width: 100%; }
   .mode-switch .filter { flex: 1; }
+  .mode-switch .search { margin-left: 0; }
   .bento-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-list > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
@@ -2339,6 +2399,7 @@ button { cursor: pointer; }
 .bus-sum-row {
   display: flex;
   align-items: baseline;
+
   justify-content: space-between;
   gap: var(--a-3);
   font-size: 13px;
@@ -2370,4 +2431,195 @@ button { cursor: pointer; }
   .bus-cell { min-height: 56px; padding: 4px 2px; }
   .bus-cell-day { font-size: 11px; }
   .bus-cell-net { font-size: 11px; }
+}
+/* ---------- 29. Ödeme araçları ve kırılma hizası ----------
+   Dışa aktarma seçenekleri tek birim olarak tutulur. Tablette araç çubuğu
+   ikinci satıra, telefonda dört kontrollü düzenli bir ızgaraya geçer. */
+.pg-toolbar-actions { justify-content: flex-end; }
+.pg-head { width: 100%; }
+.pg-who { flex: 1 1 280px; }
+.pg-figures { min-width: 0; }
+.payments-view .row > * { min-width: 0; }
+.payments-view .row-actions { justify-content: flex-start; }
+
+@media (min-width: 721px) {
+  .payments-view .row {
+    grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.6fr) minmax(172px, max-content) minmax(0, 1fr);
+  }
+  .payments-view .who { grid-column: 1; grid-row: 1; }
+  .payments-view .row-status { grid-column: 2; grid-row: 1; }
+  .payments-view .row-actions { grid-column: 3; grid-row: 1; }
+  .payments-view .row-money { grid-column: 4; grid-row: 1; }
+}
+
+@media (max-width: 900px) and (min-width: 721px) {
+  .pg-toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .pg-year-export,
+  .pg-month-export { flex-wrap: wrap; }
+  .payments-view .row { gap: var(--a-3); }
+  .payments-view .row-actions { flex-wrap: wrap; }
+  .payments-view .row-actions .btn { padding-inline: var(--a-2); }
+}
+
+@media (max-width: 720px) {
+  .pg-toolbar-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: var(--a-2);
+  }
+  .pg-toolbar-actions > .period {
+    order: 0;
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .pg-toolbar-actions > .pg-month-export {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .pg-month-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--a-2);
+  }
+  .pg-toolbar-actions > .pg-year-export {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+  .pg-toolbar-actions > .btn-primary {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    width: 100%;
+  }
+  .pg-month-picker select,
+  .pg-month-actions .btn,
+  .pg-year-export .btn {
+    width: 100%;
+    min-width: 0;
+  }
+  .pg-month-picker select { min-height: 40px; }
+  .pg-month-actions .btn,
+  .pg-year-export .btn {
+    padding-inline: var(--a-2);
+  }
+  .payments-view .row-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-content: flex-start;
+  }
+}
+ 
+/* Topbar stays in explicit rows on narrow screens; period navigation can no
+   longer displace settings, theme, refresh, or sign-out controls. */
+@media (max-width: 720px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: var(--a-2);
+  }
+  .topbar-title {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .topbar-actions {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    margin-left: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(4, minmax(34px, 40px));
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: var(--a-2);
+    justify-content: initial;
+  }
+  .topbar-actions > .topbar-upload {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .topbar-actions > .topbar-settings,
+  .topbar-actions > .topbar-theme,
+  .topbar-actions > .topbar-refresh,
+  .topbar-actions > .topbar-signout {
+    grid-row: 1;
+    justify-self: end;
+  }
+  .topbar-actions > .topbar-period {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    order: initial;
+    justify-content: space-between;
+  }
+}
+ 
+/* Kira raporunda hazır dönemlerin yanında gün bazlı başlangıç/bitiş seçimi. */
+.report-date-range {
+  display: flex;
+  align-items: end;
+  gap: var(--a-2);
+  min-width: min(100%, 330px);
+}
+.report-date-field {
+  display: grid;
+  gap: 4px;
+  min-width: 132px;
+}
+.report-date-field > span {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-3);
+}
+.report-date-field input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-2);
+  background: var(--solid);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.report-date-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.report-date-separator {
+  align-self: end;
+  padding-bottom: 10px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.report-date-clear { align-self: end; }
+
+@media (max-width: 720px) {
+  .report-date-range {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: end;
+  }
+  .report-date-field { min-width: 0; }
+  .report-date-separator { padding-bottom: 11px; }
+  .report-date-clear {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
 }

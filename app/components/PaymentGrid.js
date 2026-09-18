@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   CaretLeft,
@@ -7,11 +8,20 @@ import {
   CheckCircle,
   Clock,
   DownloadSimple,
+  FilePdf,
+  MagnifyingGlass,
   Minus,
   Plus,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { downloadCsv, formatCurrency, formatDate, formatMoneyShort, initials } from "../lib/client";
+import {
+  formatCurrency,
+  formatDate,
+  formatMoneyShort,
+  initials,
+  matchesSearch,
+  normalizeSearch,
+} from "../lib/client";
 
 const MONTH_LONG = [
   "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
@@ -49,7 +59,17 @@ export default function PaymentGrid({
   onOpenTenant,
   onPay,
   onDefer,
+  onExportMonth,
+  onExportYear,
+  exportBusy = "",
+  query = "",
 }) {
+  const [exportMonth, setExportMonth] = useState(1);
+
+  useEffect(() => {
+    if (grid) setExportMonth(grid.currentMonth || 1);
+  }, [grid?.year, grid?.currentMonth]);
+
   if (!grid) {
     return (
       <div className="view" aria-busy="true">
@@ -63,30 +83,20 @@ export default function PaymentGrid({
   }
 
   const totals = grid.totals;
-
-  function exportCsv() {
-    downloadCsv(
-      "vedat-gayrimenkul-" + grid.year + "-odeme-tablosu.csv",
-      ["Kiracı", ...grid.monthLabels, "Beklenen", "Tahsil edilen", "Açık", "Oran"],
-      grid.rows.map((row) => [
-        row.name,
-        ...row.months.map((cell) => (CELL[cell.status]?.label || "Ödenecek")),
-        row.expected,
-        row.received,
-        row.outstanding,
-        row.rate + "%",
-      ])
-    );
-  }
+  const needle = normalizeSearch(query);
+  const rows = grid.rows.filter((row) => matchesSearch(needle, row.name, row.address));
 
   return (
     <div className="view" data-busy={busy} aria-busy={busy}>
       <div className="view-bar">
         <p className="view-summary">
-          {totals.tenantCount} kiracı · {totals.paidMonths} ay işaretli ·{" "}
-          {formatCurrency(totals.received)} / {formatCurrency(totals.expected)}
+          {needle
+            ? rows.length + " / " + totals.tenantCount + " kiracı eşleşti"
+            : totals.tenantCount + " kiracı"}{" "}
+          · {totals.paidMonths} ay işaretli · {formatCurrency(totals.received)} /{" "}
+          {formatCurrency(totals.expected)}
         </p>
-        <div className="view-actions">
+        <div className="view-actions pg-toolbar-actions">
           <div className="period glass glass--chip">
             <button type="button" onClick={() => onYear(grid.year - 1)} aria-label="Önceki yıl">
               <CaretLeft weight="bold" />
@@ -96,16 +106,71 @@ export default function PaymentGrid({
               <CaretRight weight="bold" />
             </button>
           </div>
-          <button className="btn btn-glass btn-sm" type="button" onClick={exportCsv}>
-            <DownloadSimple weight="bold" />
-            Dışa aktar
-          </button>
+          <div className="pg-year-export" aria-label="Yıllık dışa aktarma">
+            <button
+              className={"btn btn-glass btn-sm" + (exportBusy === "year-excel" ? " is-busy" : "")}
+              type="button"
+              onClick={() => onExportYear(grid.year, "xlsx")}
+              disabled={Boolean(exportBusy)}
+              aria-label={grid.year + " Excel dışa aktar"}
+            >
+              <DownloadSimple weight="bold" />
+              Yıl Excel
+            </button>
+            <button
+              className={"btn btn-glass btn-sm" + (exportBusy === "year-pdf" ? " is-busy" : "")}
+              type="button"
+              onClick={() => onExportYear(grid.year, "pdf")}
+              disabled={Boolean(exportBusy)}
+              aria-label={grid.year + " PDF dışa aktar"}
+            >
+              <FilePdf weight="bold" />
+              Yıl PDF
+            </button>
+          </div>
+          <div className="pg-month-export" aria-label="Aylık dışa aktarma">
+            <label className="pg-month-picker">
+              <span className="sr-only">Dışa aktarılacak ay</span>
+              <select
+                value={exportMonth}
+                onChange={(event) => setExportMonth(Number(event.target.value))}
+                disabled={Boolean(exportBusy)}
+                aria-label="Dışa aktarılacak ay"
+              >
+                {MONTH_LONG.map((label, index) => (
+                  <option key={label} value={index + 1}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <div className="pg-month-actions">
+              <button
+                className={"btn btn-glass btn-sm" + (exportBusy === "month-excel" ? " is-busy" : "")}
+                type="button"
+                onClick={() => onExportMonth(exportMonth, grid.year, "xlsx")}
+                disabled={Boolean(exportBusy)}
+                aria-label={MONTH_LONG[exportMonth - 1] + " " + grid.year + " Excel dışa aktar"}
+              >
+                <DownloadSimple weight="bold" />
+                Ay Excel
+              </button>
+              <button
+                className={"btn btn-glass btn-sm" + (exportBusy === "month-pdf" ? " is-busy" : "")}
+                type="button"
+                onClick={() => onExportMonth(exportMonth, grid.year, "pdf")}
+                disabled={Boolean(exportBusy)}
+                aria-label={MONTH_LONG[exportMonth - 1] + " " + grid.year + " PDF dışa aktar"}
+              >
+                <FilePdf weight="bold" />
+                Ay PDF
+              </button>
+            </div>
+          </div>
           <button className="btn btn-primary btn-sm" type="button" onClick={() => onPay(null)}>
             <Plus weight="bold" />
             Ödeme ekle
           </button>
         </div>
-      </div>
+</div>
 
       <div className="pg-legend" role="note">
         <span className="pg-key state-paid"><CheckCircle weight="fill" />Ödendi</span>
@@ -115,9 +180,9 @@ export default function PaymentGrid({
         <span className="pg-hint">Boş aya dokunun: ödendi işaretlenir. Dolu aya dokunun: tutarı düzeltin.</span>
       </div>
 
-      {grid.rows.length ? (
+      {rows.length ? (
         <div className="pg-list">
-          {grid.rows.map((row, index) => (
+          {rows.map((row, index) => (
             <article className="pg-card glass" key={row.tenantId} style={{ "--i": index }}>
               <header className="pg-head">
                 <button className="pg-who" type="button" onClick={() => onOpenTenant(row.tenantId)}>
@@ -206,6 +271,12 @@ export default function PaymentGrid({
             </article>
           ))}
         </div>
+      ) : needle ? (
+        <div className="empty">
+          <MagnifyingGlass weight="duotone" />
+          <strong>“{query.trim()}” ile eşleşen kiracı yok</strong>
+          <span>Adın yazılışını değiştirin ya da aramayı temizleyin.</span>
+        </div>
       ) : (
         <div className="empty">
           <Plus weight="duotone" />
@@ -215,7 +286,9 @@ export default function PaymentGrid({
       )}
 
       <article className="glass strip-panel" aria-label={grid.year + " toplamı"}>
-        <p className="strip-title">{grid.year} toplamı</p>
+        <p className="strip-title">
+          {grid.year} toplamı{needle ? " · tüm kiracılar" : ""}
+        </p>
         <div className="strip">
           <div className="strip-item">
             <strong className="num">{formatCurrency(totals.received)}</strong>

@@ -87,6 +87,7 @@ function buildDuesYearGrid({ year, recurrences, expenses, reference = now().toDa
       dayOfMonth: item.dayOfMonth,
       tenantId: item.tenant?._id?.toString() || item.tenant?.toString() || '',
       tenantName: item.tenant?.name || '',
+      archived: item.tenant?.isActive === false,
       note: item.note || '',
       isActive: item.isActive !== false,
       startDate: item.startDate ? new Date(item.startDate).toISOString() : null,
@@ -135,6 +136,7 @@ function buildDuesPeriod({ month, year, recurrences, expenses, reference = now()
       unit: row.unit,
       label: row.label,
       tenantName: row.tenantName,
+      archived: row.archived,
       dayOfMonth: row.dayOfMonth,
       ...row.months[month - 1],
     }))
@@ -160,4 +162,16 @@ function buildDuesPeriod({ month, year, recurrences, expenses, reference = now()
   };
 }
 
-module.exports = { buildDuesPeriod, buildDuesYearGrid, coversPeriod, dueDateFor };
+/* Arşivdeki kiracının aidat kalemi hiçbir toplama girmez. Binaya ait
+   (kiracısız) kalemler yerinde kalır. */
+function withoutArchivedTenants(recurrences = []) {
+  return recurrences.filter((item) => !item.tenant || item.tenant.isActive !== false);
+}
+
+module.exports = {
+  buildDuesPeriod,
+  buildDuesYearGrid,
+  coversPeriod,
+  dueDateFor,
+  withoutArchivedTenants,
+};

@@ -1,7 +1,7 @@
 const Expense = require('../models/expense');
 const Recurrence = require('../models/recurrence');
 const { now } = require('../utils/format');
-const { buildDuesPeriod, buildDuesYearGrid, dueDateFor } = require('../utils/dues');
+const { buildDuesPeriod, buildDuesYearGrid, dueDateFor, withoutArchivedTenants } = require('../utils/dues');
 const { notifyDueSettled, notifyDueReopened } = require('./notificationService');
 
 /* Aidat kalemi = kategorisi "aidat" olan düzenli gider. Panel ve bot bu
@@ -28,7 +28,8 @@ async function findDue(dueId) {
 }
 
 async function loadDues() {
-  return Recurrence.find(dueFilter()).sort({ dayOfMonth: 1, title: 1 }).populate('tenant', 'name');
+  const dues = await Recurrence.find(dueFilter()).sort({ dayOfMonth: 1, title: 1 }).populate('tenant', 'name isActive');
+  return withoutArchivedTenants(dues);
 }
 
 async function loadYearGrid(year) {

@@ -13,6 +13,11 @@ const {
   buildRangeReportPdf,
   fileNameFor,
 } = require('../utils/pdfReport');
+const {
+  buildAnnualPaymentsWorkbook,
+  buildMonthPaymentsWorkbook,
+  fileNameForExcel,
+} = require('../utils/excelReport');
 const { parsePeriod } = require('../utils/api');
 
 function streamPdf(res, doc, fileName) {
@@ -21,6 +26,15 @@ function streamPdf(res, doc, fileName) {
   res.setHeader('Cache-Control', 'no-store');
   doc.pipe(res);
   doc.end();
+}
+
+async function streamExcel(res, workbook, fileName) {
+  const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="' + fileName + '"');
+  res.setHeader('Content-Length', buffer.length);
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(200).end(Buffer.from(buffer));
 }
 
 module.exports = async (req, res) => {
@@ -33,6 +47,7 @@ module.exports = async (req, res) => {
     if (mongoose.connection.readyState !== 1) await connectDB();
 
     const wantsPdf = String(req.query.format || '') === 'pdf';
+    const wantsExcel = ['xlsx', 'excel'].includes(String(req.query.format || '').toLowerCase());
     const scope = String(req.query.scope || 'range');
 
     if (scope === 'bus') {
@@ -53,8 +68,9 @@ module.exports = async (req, res) => {
     if (scope === 'month') {
       const { month, year } = parsePeriod(req.query);
       const report = await monthReport(month, year);
-      if (!wantsPdf) return res.status(200).json(report);
-      return streamPdf(res, buildMonthReportPdf(report), fileNameFor('month', year, month));
+      if (!wantsPdf && !wantsExcel) return res.status(200).json(report);
+      if (wantsPdf) return streamPdf(res, buildMonthReportPdf(report), fileNameFor('month', year, month));
+      return streamExcel(res, buildMonthPaymentsWorkbook(report), fileNameForExcel('month', year, month));
     }
 
     if (scope === 'annual') {
@@ -65,19 +81,26 @@ module.exports = async (req, res) => {
         : currentYear;
 
       const annual = await annualReport(year);
-      if (!wantsPdf) return res.status(200).json(annual);
-      return streamPdf(res, buildAnnualReportPdf(annual), fileNameFor('annual', year));
+      if (!wantsPdf && !wantsExcel) return res.status(200).json(annual);
+      if (wantsPdf) return streamPdf(res, buildAnnualReportPdf(annual), fileNameFor('annual', year));
+      return streamExcel(res, buildAnnualPaymentsWorkbook(annual), fileNameForExcel('annual', year));
     }
 
     const requested = Number(req.query.months);
     const monthCount = Number.isInteger(requested) && requested >= 3 && requested <= 24 ? requested : 12;
-    const report = await rangeReport(monthCount);
+    const report = await rangeReport(monthCount, {
+      startDate: req.query.start,
+      endDate: req.query.end,
+    });
 
     if (!wantsPdf) return res.status(200).json(report);
-    return streamPdf(res, buildRangeReportPdf(report), fileNameFor('range', monthCount));
+    const fileName = report.startDate && report.endDate
+      ? `vedat-gayrimenkul-${report.startDate}-${report.endDate}.pdf`
+      : fileNameFor('range', report.months);
+    return streamPdf(res, buildRangeReportPdf(report), fileName);
   } catch (error) {
     console.error('Reports API error:', error);
-    if (res.headersSent) return undefined;
-    return res.status(500).json({ error: 'Rapor verisi alınamadı.' });
+    const status = error.code === 'INVALID_REPORT_RANGE' ? 400 : 500;
+    return res.status(status).json({ error: status === 400 ? error.message : 'Rapor verisi alınamadı.' });
   }
 };

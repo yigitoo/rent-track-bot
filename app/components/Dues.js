@@ -64,7 +64,7 @@ export default function DuesView({
     downloadCsv(
       "vedat-gayrimenkul-" + grid.year + "-aidat.csv",
       ["Daire", "Aidat kalemi", "İlgili kiracı", "Ayın günü", ...grid.monthLabels, "Beklenen", "Ödenen", "Açık", "Oran"],
-      grid.rows.map((row) => [
+      grid.rows.filter((row) => !row.archived).map((row) => [
         row.unit || "—",
         row.title,
         row.tenantName || "Genel",
