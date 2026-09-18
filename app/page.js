@@ -536,10 +536,34 @@ function TenantsView({
     <div className="view" data-busy={busy} aria-busy={busy}>
       <div className="view-bar">
         <p className="view-summary">
-          {tenants.length} kiracı · {formatCurrency(monthlyTotal)} aylık
-          {depositTotal ? " · " + formatCurrency(depositTotal) + " depozito" : ""}
+          {showArchived ? (
+            archivedCount + " arşivde kiracı · toplamlara girmez"
+          ) : (
+            <>
+              {tenants.length} kiracı · {formatCurrency(monthlyTotal)} aylık
+              {depositTotal ? " · " + formatCurrency(depositTotal) + " depozito" : ""}
+            </>
+          )}
         </p>
         <div className="view-actions">
+          <div className="filters glass glass--chip" role="group" aria-label="Kiracı görünümü">
+            <button
+              type="button"
+              className={"filter" + (showArchived ? "" : " is-active")}
+              onClick={() => showArchived && onToggleArchived()}
+              aria-pressed={!showArchived}
+            >
+              Aktif ({tenants.length})
+            </button>
+            <button
+              type="button"
+              className={"filter" + (showArchived ? " is-active" : "")}
+              onClick={() => !showArchived && onToggleArchived()}
+              aria-pressed={showArchived}
+            >
+              Arşiv ({archivedCount})
+            </button>
+          </div>
           <div className="search glass glass--chip">
             <MagnifyingGlass weight="bold" />
             <input
@@ -550,17 +574,6 @@ function TenantsView({
               onChange={(event) => onQuery(event.target.value)}
             />
           </div>
-          {archivedCount ? (
-            <button
-              className={"btn btn-sm " + (showArchived ? "btn-glass" : "btn-quiet")}
-              type="button"
-              onClick={onToggleArchived}
-              aria-pressed={showArchived}
-            >
-              <Archive weight="bold" />
-              Arşiv ({archivedCount})
-            </button>
-          ) : null}
           <button className="btn btn-primary btn-sm" type="button" onClick={onCreate}>
             <Plus weight="bold" />
             Kiracı ekle
@@ -568,10 +581,9 @@ function TenantsView({
         </div>
       </div>
 
-      {/* Arşiv listenin üstünde açılır: altta kalınca 35 satırın ardında görünmüyordu. */}
+      {/* Arşiv ayrı görünüm: aktif liste ile aynı anda gösterilmez, karışmaz. */}
       {showArchived ? (
         <div className="archive-block">
-          <p className="strip-title">Arşiv</p>
           <div className="rows">
             {archivedLoading ? (
               <p className="chips-empty">Arşiv yükleniyor…</p>
@@ -614,8 +626,7 @@ function TenantsView({
             )}
           </div>
         </div>
-      ) : null}
-
+      ) : (
       <div className="rows">
         {visible.length ? (
           visible.map((tenant, index) => {
@@ -681,7 +692,7 @@ function TenantsView({
           />
         )}
       </div>
-
+      )}
     </div>
   );
 }
