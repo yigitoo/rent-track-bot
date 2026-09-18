@@ -13,7 +13,15 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { BarList, TrendChart } from "./Charts";
+import DateRangePicker from "./DateRangePicker";
 import { downloadCsv, formatCurrency, formatDate } from "../lib/client";
+
+const BUS_SPANS = [
+  ["month", "Aylık"],
+  [3, "3 ay"],
+  [6, "6 ay"],
+  [12, "12 ay"],
+];
 
 const RANGES = [
   [6, "6 ay"],
@@ -370,34 +378,17 @@ function RangeView({
               </button>
             ))}
           </div>
-          <div className="report-date-range" aria-label="Özel tarih aralığı">
-            <label className="report-date-field">
-              <span>Başlangıç</span>
-              <input
-                type="date"
-                value={startDate}
-                max={endDate || undefined}
-                onChange={(event) => onStartDate(event.target.value)}
-                aria-label="Rapor başlangıç tarihi"
-              />
-            </label>
-            <span className="report-date-separator" aria-hidden="true">→</span>
-            <label className="report-date-field">
-              <span>Bitiş</span>
-              <input
-                type="date"
-                value={endDate}
-                min={startDate || undefined}
-                onChange={(event) => onEndDate(event.target.value)}
-                aria-label="Rapor bitiş tarihi"
-              />
-            </label>
-            {startDate || endDate ? (
-              <button className="btn btn-quiet btn-sm report-date-clear" type="button" onClick={onClearRange}>
-                Temizle
-              </button>
-            ) : null}
-          </div>
+          <DateRangePicker
+            start={startDate}
+            end={endDate}
+            active={customRange}
+            label="Kira raporu tarih aralığı"
+            onChange={(range) => {
+              onStartDate(range.start);
+              onEndDate(range.end);
+            }}
+            onClear={onClearRange}
+          />
           <button className="btn btn-glass btn-sm" type="button" onClick={exportSeries} disabled={incompleteRange}>
             <DownloadSimple weight="bold" />
             CSV
@@ -546,16 +537,43 @@ function RangeView({
 
 /* ---------- Otobüs hattı ---------- */
 
-function BusReportView({ busReport, busPeriod, busy, downloading, onBusPeriod, onPdf }) {
-  if (!busReport) return <Loading label="Otobüs raporu hazırlanıyor" />;
-  const t = busReport.totals;
+const monthYear = new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" });
+
+function BusReportView({
+  busReport,
+  busPeriodReport,
+  busPeriod,
+  busSpan = "month",
+  busRange,
+  busy,
+  downloading,
+  onBusPeriod,
+  onBusSpan,
+  onBusRange,
+  onPdf,
+}) {
+  const isMonth = busSpan === "month";
+  const isCustom = busSpan === "custom";
+  const report = isMonth ? busReport : busPeriodReport;
+  if (!report) return <Loading label="Otobüs raporu hazırlanıyor" />;
+  const t = report.totals;
 
   function exportCsv() {
+    if (isMonth) {
+      downloadCsv(
+        "otobus-" + report.year + "-" + String(report.month).padStart(2, "0") + ".csv",
+        ["Gün", "Araç", "Toplam", "Mazot", "Yövmiye", "Denekçi", "Diğer", "Kalan", "Not"],
+        report.rows.map((row) => [
+          row.day, row.busNumber, row.gross, row.fuel, row.wage, row.fee, row.other, row.net, row.note || "",
+        ])
+      );
+      return;
+    }
     downloadCsv(
-      "otobus-" + busReport.year + "-" + String(busReport.month).padStart(2, "0") + ".csv",
-      ["Gün", "Araç", "Toplam", "Mazot", "Yövmiye", "Denekçi", "Diğer", "Kalan", "Not"],
-      busReport.rows.map((row) => [
-        row.day, row.busNumber, row.gross, row.fuel, row.wage, row.fee, row.other, row.net, row.note || "",
+      "otobus-" + report.startDate + "-" + report.endDate + ".csv",
+      ["Dönem", "Gün", "Toplam", "Mazot", "Yövmiye", "Denekçi", "Diğer", "Kalan"],
+      report.series.map((item) => [
+        item.label, item.days, item.gross, item.fuel, item.wage, item.fee, item.other, item.net,
       ])
     );
   }
@@ -564,14 +582,42 @@ function BusReportView({ busReport, busPeriod, busy, downloading, onBusPeriod, o
     <div className="view" data-busy={busy} aria-busy={busy}>
       <div className="view-bar">
         <p className="view-summary">
-          {busReport.label} · {t.days} gün · {formatCurrency(t.gross)} hasılat · {formatCurrency(t.net)} kalan
+          {report.label} · {t.days} gün · {formatCurrency(t.gross)} hasılat · {formatCurrency(t.net)} kalan
         </p>
-        <div className="view-actions">
-          <div className="period glass glass--chip">
-            <button type="button" onClick={() => onBusPeriod(-1)} aria-label="Önceki ay">‹</button>
-            <strong>{busReport.label}</strong>
-            <button type="button" onClick={() => onBusPeriod(1)} aria-label="Sonraki ay">›</button>
+        <div className="view-actions bus-report-actions">
+          <div className="filters glass glass--chip" role="group" aria-label="Otobüs rapor dönemi">
+            {BUS_SPANS.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={"filter" + (busSpan === value ? " is-active" : "")}
+                onClick={() => onBusSpan(value)}
+                aria-pressed={busSpan === value}
+              >
+                {label}
+              </button>
+            ))}
           </div>
+          <DateRangePicker
+            start={isCustom ? busRange.start : ""}
+            end={isCustom ? busRange.end : ""}
+            active={isCustom}
+            placeholder="Özel aralık"
+            label="Otobüs raporu tarih aralığı"
+            onChange={(range) => onBusRange(range)}
+            onClear={isCustom ? () => onBusSpan("month") : undefined}
+          />
+          {isCustom ? null : (
+            <div className="period glass glass--chip">
+              <button type="button" onClick={() => onBusPeriod(-1)} aria-label="Önceki ay">‹</button>
+              <strong>
+                {isMonth
+                  ? report.label
+                  : "Bitiş: " + monthYear.format(new Date(busPeriod.year, busPeriod.month - 1, 1))}
+              </strong>
+              <button type="button" onClick={() => onBusPeriod(1)} aria-label="Sonraki ay">›</button>
+            </div>
+          )}
           <button className="btn btn-glass btn-sm" type="button" onClick={exportCsv}>
             <DownloadSimple weight="bold" />
             CSV
@@ -587,6 +633,15 @@ function BusReportView({ busReport, busPeriod, busy, downloading, onBusPeriod, o
         </div>
       </div>
 
+      {isMonth ? <BusMonthBody busReport={report} /> : <BusPeriodBody report={report} />}
+    </div>
+  );
+}
+
+function BusMonthBody({ busReport }) {
+  const t = busReport.totals;
+  return (
+    <>
       <div className="bento bento-4">
         <article className="tile glass tile-accent" style={{ "--i": 0 }}>
           <div className="tile-head"><Bus weight="duotone" />Toplam hasılat</div>
@@ -675,7 +730,143 @@ function BusReportView({ busReport, busPeriod, busy, downloading, onBusPeriod, o
           </div>
         )}
       </article>
-    </div>
+    </>
+  );
+}
+
+/* 3/6/12 ay ya da özel aralık: aylara göre döküm ve araç bazında toplam. */
+function BusPeriodBody({ report }) {
+  const t = report.totals;
+  return (
+    <>
+      <div className="bento bento-4">
+        <article className="tile glass tile-accent" style={{ "--i": 0 }}>
+          <div className="tile-head"><Bus weight="duotone" />Toplam hasılat</div>
+          <div className="tile-value num">{formatCurrency(t.gross)}</div>
+          <p className="tile-meta">{t.days} gün · günlük ort. {formatCurrency(t.averageGross)}</p>
+        </article>
+        <article className="tile glass" style={{ "--i": 1 }}>
+          <div className="tile-head"><GasPump weight="duotone" />Mazot</div>
+          <div className="tile-value num">{formatCurrency(t.fuel)}</div>
+          <p className="tile-meta">hasılatın %{t.gross ? Math.round((t.fuel / t.gross) * 100) : 0}&apos;i</p>
+        </article>
+        <article className="tile glass" style={{ "--i": 2 }}>
+          <div className="tile-head"><ChartLineUp weight="duotone" />Toplam gider</div>
+          <div className="tile-value num">{formatCurrency(t.expense)}</div>
+          <p className="tile-meta">yövmiye {formatCurrency(t.wage)} · denekçi {formatCurrency(t.fee)}</p>
+        </article>
+        <article className="tile glass" style={{ "--i": 3 }}>
+          <div className="tile-head"><TrendUp weight="duotone" />Kalan</div>
+          <div className={"tile-value num" + (t.net < 0 ? " tone-bad" : "")}>{formatCurrency(t.net)}</div>
+          <div className="spark tone-accent"><i style={{ width: Math.max(Math.min(t.margin, 100), 0) + "%" }} /></div>
+          <p className="tile-meta">kâr marjı %{t.margin} · aylık ort. {formatCurrency(t.averageMonthly)}</p>
+        </article>
+      </div>
+
+      <article className="panel glass">
+        <div className="panel-head">
+          <div>
+            <p className="eyebrow">{report.months} aylık döküm</p>
+            <h2>Aylara göre kalemler</h2>
+          </div>
+          {t.bestMonth ? (
+            <span className="pill pill-ok">En iyi ay · {t.bestMonth.label}</span>
+          ) : null}
+        </div>
+
+        {t.days ? (
+          <div className="matrix-scroll">
+            <table className="matrix bus-table">
+              <thead>
+                <tr>
+                  <th scope="col">Dönem</th>
+                  <th scope="col">Gün</th>
+                  <th scope="col">Toplam</th>
+                  <th scope="col">Mazot</th>
+                  <th scope="col">Yövmiye</th>
+                  <th scope="col">Denekçi</th>
+                  <th scope="col">Diğer</th>
+                  <th scope="col">Kalan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.series.map((item) => (
+                  <tr key={item.year + "-" + item.month}>
+                    <th scope="row">{item.label}</th>
+                    <td>{item.days || "—"}</td>
+                    <td className="num">{item.days ? formatCurrency(item.gross) : "—"}</td>
+                    <td className="num">{item.fuel ? formatCurrency(item.fuel) : "—"}</td>
+                    <td className="num">{item.wage ? formatCurrency(item.wage) : "—"}</td>
+                    <td className="num">{item.fee ? formatCurrency(item.fee) : "—"}</td>
+                    <td className="num">{item.other ? formatCurrency(item.other) : "—"}</td>
+                    <td className={"num " + (item.days ? (item.net < 0 ? "tone-bad" : "tone-ok") : "")}>
+                      {item.days ? formatCurrency(item.net) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row">Toplam</th>
+                  <td>{t.days} gün</td>
+                  <td className="num">{formatCurrency(t.gross)}</td>
+                  <td className="num">{formatCurrency(t.fuel)}</td>
+                  <td className="num">{formatCurrency(t.wage)}</td>
+                  <td className="num">{formatCurrency(t.fee)}</td>
+                  <td className="num">{formatCurrency(t.other)}</td>
+                  <td className={"num " + (t.net < 0 ? "tone-bad" : "tone-ok")}>{formatCurrency(t.net)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ) : (
+          <div className="empty">
+            <Bus weight="duotone" />
+            <strong>Bu aralıkta kayıt yok</strong>
+            <span>Başka bir dönem seçin ya da Otobüs sayfasından gün gün kalemleri girin.</span>
+          </div>
+        )}
+      </article>
+
+      {report.perBus.length > 1 ? (
+        <article className="panel glass">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Dönem toplamı</p>
+              <h2>Araç bazında</h2>
+            </div>
+          </div>
+          <div className="matrix-scroll">
+            <table className="matrix bus-table">
+              <thead>
+                <tr>
+                  <th scope="col">Araç</th>
+                  <th scope="col">Gün</th>
+                  <th scope="col">Toplam</th>
+                  <th scope="col">Mazot</th>
+                  <th scope="col">Gider</th>
+                  <th scope="col">Kalan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.perBus.map((bus) => (
+                  <tr key={bus.id}>
+                    <th scope="row">{bus.number}{bus.label ? " · " + bus.label : ""}</th>
+                    <td>{bus.totals.days}</td>
+                    <td className="num">{formatCurrency(bus.totals.gross)}</td>
+                    <td className="num">{formatCurrency(bus.totals.fuel)}</td>
+                    <td className="num">{formatCurrency(bus.totals.expense)}</td>
+                    <td className={"num " + (bus.totals.net < 0 ? "tone-bad" : "tone-ok")}>
+                      {formatCurrency(bus.totals.net)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      ) : null}
+    </>
   );
 }
 

@@ -81,6 +81,25 @@ import {
 
 const BRAND = "Vedat Gayrimenkul";
 
+function dateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+/* Otobüs raporunun tarih aralığı. Hazır dönemler (3/6/12 ay) seçili ayda
+   biter; o ay bu aysa bitiş bugündür, gelmemiş günler "kayıtsız" sayılmasın. */
+function busRangeFor(span, period, custom) {
+  if (span === "custom") return custom;
+  if (typeof span !== "number" || !period.year) return { start: "", end: "" };
+  const start = new Date(period.year, period.month - span, 1);
+  const monthEnd = new Date(period.year, period.month, 0);
+  const today = new Date();
+  return { start: dateKey(start), end: dateKey(monthEnd > today ? today : monthEnd) };
+}
+
 const MONTH_LONG = [
   "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
   "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
@@ -847,6 +866,9 @@ export default function Page() {
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
   const [annual, setAnnual] = useState(null);
   const [busReport, setBusReport] = useState(null);
+  const [busSpan, setBusSpan] = useState("month");
+  const [busRange, setBusRange] = useState({ start: "", end: "" });
+  const [busPeriodReport, setBusPeriodReport] = useState(null);
   const [combined, setCombined] = useState(null);
   const [paymentExportBusy, setPaymentExportBusy] = useState("");
   const [downloading, setDownloading] = useState(false);
@@ -1008,8 +1030,16 @@ export default function Page() {
     const customRangeQuery = reportMode === "range" && reportStartDate && reportEndDate
       ? "&start=" + encodeURIComponent(reportStartDate) + "&end=" + encodeURIComponent(reportEndDate)
       : "";
+    const busWindow = busRangeFor(busSpan, busPeriod, busRange);
+    const busByRange = reportMode === "bus" && busSpan !== "month";
+    if (busByRange && (!busWindow.start || !busWindow.end)) {
+      setReportLoading(false);
+      return undefined;
+    }
     const url = reportMode === "annual"
       ? "/api/reports?scope=annual&year=" + reportYear
+      : busByRange
+        ? "/api/reports?scope=bus-period&start=" + busWindow.start + "&end=" + busWindow.end
       : reportMode === "bus"
         ? "/api/reports?scope=bus&month=" + busPeriod.month + "&year=" + busPeriod.year
         : reportMode === "combined"
@@ -1022,6 +1052,7 @@ export default function Page() {
       .then((payload) => {
         if (cancelled) return;
         if (reportMode === "annual") setAnnual(payload);
+        else if (busByRange) setBusPeriodReport(payload);
         else if (reportMode === "bus") setBusReport(payload);
         else if (reportMode === "combined") setCombined(payload);
         else setReport(payload);
@@ -1044,6 +1075,9 @@ export default function Page() {
     reportYear,
     busPeriod.month,
     busPeriod.year,
+    busSpan,
+    busRange.start,
+    busRange.end,
     busStamp,
     token,
     data,
@@ -1398,6 +1432,10 @@ export default function Page() {
       if (kind === "annual") {
         url = "/api/reports?scope=annual&year=" + reportYear + "&format=pdf";
         fileName = "vedat-gayrimenkul-" + reportYear + "-yillik.pdf";
+      } else if (kind === "bus" && busSpan !== "month") {
+        const busWindow = busRangeFor(busSpan, busPeriod, busRange);
+        url = "/api/reports?scope=bus-period&start=" + busWindow.start + "&end=" + busWindow.end + "&format=pdf";
+        fileName = "otobus-hatti-" + busWindow.start + "-" + busWindow.end + ".pdf";
       } else if (kind === "bus") {
         url = "/api/reports?scope=bus&month=" + busPeriod.month + "&year=" + busPeriod.year + "&format=pdf";
         fileName = "otobus-hatti-" + busPeriod.year + "-" + String(busPeriod.month).padStart(2, "0") + ".pdf";
@@ -1790,6 +1828,14 @@ export default function Page() {
               report={report}
               annual={annual}
               busReport={busReport}
+              busPeriodReport={busPeriodReport}
+              busSpan={busSpan}
+              busRange={busRange}
+              onBusSpan={setBusSpan}
+              onBusRange={(range) => {
+                setBusRange(range);
+                setBusSpan("custom");
+              }}
               combined={combined}
               busPeriod={busPeriod}
               onBusPeriod={shiftBusPeriod}

@@ -2,6 +2,7 @@ const Bus = require('../models/bus');
 const BusDay = require('../models/busDay');
 const { formatMonthYear, now } = require('../utils/format');
 const { requireMoney } = require('../utils/money');
+const { monthKeysBetween, parseDateRange } = require('../utils/reports');
 
 /* Otobüs hattı defteri. Gün gün yazılır, ay sonunda kalem kalem toplanır.
    Kira tarafıyla aynı mantık: tek servis, panel de bot da buradan geçer. */
@@ -283,6 +284,74 @@ async function rangeReport(monthCount = 12) {
   };
 }
 
+/* Tarih aralığı raporu: 3/6/12 aylık hazır dönemler ve takvimden seçilen
+   özel aralık aynı yoldan geçer. Aylık seri, araç bazında toplam ve
+   kalem kalem özet döner; PDF de ekran da bu nesneyi kullanır. */
+async function periodReport({ start, end, busId = '' }) {
+  const range = parseDateRange(start, end);
+  if (!range) {
+    const error = new Error('Başlangıç ve bitiş tarihlerini seçin.');
+    error.code = 'INVALID_REPORT_RANGE';
+    throw error;
+  }
+  const aylar = monthKeysBetween(range.start, range.end);
+
+  const filter = { date: { $gte: range.start, $lt: range.endExclusive } };
+  if (busId) filter.bus = busId;
+
+  const [kayitlar, buses] = await Promise.all([
+    BusDay.find(filter).populate('bus', 'number label').sort({ date: 1 }),
+    Bus.find({ isActive: true }).sort({ number: 1 }),
+  ]);
+
+  const series = aylar.map(({ month, year }) => {
+    const kendi = kayitlar.filter((k) => k.month === month && k.year === year);
+    return {
+      month,
+      year,
+      label: formatMonthYear(month, year),
+      short: new Intl.DateTimeFormat('tr-TR', { month: 'short' }).format(new Date(year, month - 1, 1)),
+      ...topla(kendi),
+    };
+  });
+
+  const perBus = buses
+    .map((bus) => {
+      const id = bus._id.toString();
+      const kendi = kayitlar.filter((k) => (k.bus?._id?.toString() || k.bus?.toString()) === id);
+      return { ...serializeBus(bus), totals: topla(kendi) };
+    })
+    .filter((item) => (busId ? item.id === busId : item.totals.days > 0));
+
+  const totals = topla(kayitlar);
+  const gunSayisi = Math.round((range.endExclusive - range.start) / 86400000);
+  const islenenGun = new Set(kayitlar.map((k) => new Date(k.date).toDateString())).size;
+  const best = series.reduce((top, item) => (item.net > (top?.net ?? -Infinity) ? item : top), null);
+  const fmt = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  return {
+    scope: 'bus-period',
+    startDate: range.startKey,
+    endDate: range.endKey,
+    label: fmt.format(range.start) + ' – ' + fmt.format(range.end),
+    busId,
+    months: series.length,
+    series,
+    perBus,
+    totals: {
+      ...totals,
+      averageGross: totals.days ? Math.round(totals.gross / totals.days) : 0,
+      averageNet: totals.days ? Math.round(totals.net / totals.days) : 0,
+      averageMonthly: series.length ? Math.round(totals.net / series.length) : 0,
+      margin: totals.gross ? Math.round((totals.net / totals.gross) * 100) : 0,
+      dayCount: gunSayisi,
+      missingDays: Math.max(gunSayisi - islenenGun, 0),
+      bestMonth: best && best.days ? { label: best.label, net: best.net } : null,
+    },
+    labels: ETIKET,
+  };
+}
+
 module.exports = {
   ETIKET,
   KALEMLER,
@@ -290,6 +359,7 @@ module.exports = {
   listBuses,
   loadMonth,
   monthReport,
+  periodReport,
   rangeReport,
   saveBus,
   saveDay,

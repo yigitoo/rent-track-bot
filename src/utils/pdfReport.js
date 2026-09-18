@@ -561,6 +561,130 @@ function buildBusMonthReportPdf(report) {
   return doc;
 }
 
+/* Otobüs dönem raporu: 3/6/12 ay ya da takvimden seçilen özel aralık.
+   Aylık seri, araç bazında toplam ve kalem kalem özet. */
+function buildBusPeriodReportPdf(report) {
+  const doc = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true });
+  registerFonts(doc);
+
+  const t = report.totals;
+  const title = 'Otobüs hattı dönem raporu';
+  header(doc, {
+    title,
+    subtitle: report.label + ' · ' + t.days + ' gün işlendi',
+    meta: formatDate(now().toDate()),
+  });
+
+  statCards(doc, [
+    { label: 'Toplam hasılat', value: formatCurrency(t.gross), fg: C.accent, bg: C.accentSoft },
+    { label: 'Mazot', value: formatCurrency(t.fuel), fg: C.warn, bg: C.warnSoft },
+    { label: 'Toplam gider', value: formatCurrency(t.expense), fg: C.ink },
+    { label: 'Aylık ort. kalan', value: formatCurrency(t.averageMonthly), fg: C.ink },
+    { label: 'Kalan', value: formatCurrency(t.net), fg: t.net >= 0 ? C.ok : C.bad, bg: t.net >= 0 ? C.okSoft : C.badSoft },
+  ]);
+
+  sectionTitle(
+    doc,
+    'Aylara göre',
+    [
+      report.months + ' ay · ' + t.dayCount + ' günlük aralık',
+      t.missingDays ? t.missingDays + ' gün kayıtsız' : '',
+      t.bestMonth ? 'en iyi ay ' + t.bestMonth.label + ' (' + formatCurrency(t.bestMonth.net) + ')' : '',
+    ].filter(Boolean).join(' · ')
+  );
+  table(doc, {
+    columns: [
+      { label: 'Dönem', weight: 2.2 },
+      { label: 'Gün', weight: 0.8, align: 'right' },
+      { label: 'Toplam', weight: 1.6, align: 'right' },
+      { label: 'Mazot', weight: 1.4, align: 'right' },
+      { label: 'Yövmiye', weight: 1.4, align: 'right' },
+      { label: 'Denekçi', weight: 1.3, align: 'right' },
+      { label: 'Diğer', weight: 1.2, align: 'right' },
+      { label: 'Kalan', weight: 1.6, align: 'right' },
+    ],
+    rows: report.series.map((item) => [
+      { text: item.label, font: 'semi' },
+      { text: item.days || '—', color: C.ink3 },
+      item.days ? formatCurrency(item.gross) : { text: '—', color: C.ink3 },
+      { text: item.fuel ? formatCurrency(item.fuel) : '—', color: item.fuel ? C.warn : C.ink3 },
+      { text: item.wage ? formatCurrency(item.wage) : '—', color: item.wage ? C.ink : C.ink3 },
+      { text: item.fee ? formatCurrency(item.fee) : '—', color: item.fee ? C.ink : C.ink3 },
+      { text: item.other ? formatCurrency(item.other) : '—', color: item.other ? C.ink : C.ink3 },
+      item.days
+        ? { text: formatCurrency(item.net), color: item.net >= 0 ? C.ok : C.bad, font: 'semi' }
+        : { text: '—', color: C.ink3 },
+    ]),
+    onNewPage: (d) => header(d, { title, subtitle: report.label + ' · aylara göre (devam)' }),
+  });
+
+  if (report.perBus.length > 1) {
+    sectionTitle(doc, 'Araç bazında', 'Dönem toplamı');
+    table(doc, {
+      columns: [
+        { label: 'Araç', weight: 2.4 },
+        { label: 'Gün', weight: 0.8, align: 'right' },
+        { label: 'Toplam', weight: 1.6, align: 'right' },
+        { label: 'Mazot', weight: 1.4, align: 'right' },
+        { label: 'Yövmiye', weight: 1.4, align: 'right' },
+        { label: 'Denekçi', weight: 1.3, align: 'right' },
+        { label: 'Kalan', weight: 1.6, align: 'right' },
+      ],
+      rows: report.perBus.map((bus) => [
+        { text: (bus.number + ' numara' + (bus.label ? ' · ' + bus.label : '')).slice(0, 28), font: 'semi' },
+        { text: bus.totals.days, color: C.ink3 },
+        formatCurrency(bus.totals.gross),
+        { text: formatCurrency(bus.totals.fuel), color: C.warn },
+        formatCurrency(bus.totals.wage),
+        formatCurrency(bus.totals.fee),
+        { text: formatCurrency(bus.totals.net), color: bus.totals.net >= 0 ? C.ok : C.bad, font: 'semi' },
+      ]),
+      onNewPage: (d) => header(d, { title, subtitle: report.label + ' · araç bazında (devam)' }),
+    });
+  }
+
+  /* Özet tablosu bölünmez: son satırın ("Kalan") tek başına yeni sayfaya
+     düşmesi raporu okunmaz kılıyordu. Sıfır kalemler de yer kaplamasın. */
+  const kalemler = [
+    ['Mazot', t.fuel, C.warn],
+    ['Yövmiye', t.wage, C.ink],
+    ['Denekçi', t.fee, C.ink],
+    ['Diğer', t.other, C.ink],
+  ].filter(([, value]) => value);
+  const gereken = 44 + (kalemler.length + 3) * 20;
+  if (doc.y + gereken > doc.page.height - doc.page.margins.bottom - 24) {
+    doc.addPage();
+  }
+
+  sectionTitle(
+    doc,
+    'Dönem toplamı',
+    'Günlük ort. hasılat ' + formatCurrency(t.averageGross) + ' · günlük ort. kalan ' + formatCurrency(t.averageNet)
+  );
+  const pay = (value) => '%' + (t.gross ? Math.round((value / t.gross) * 100) : 0);
+  table(doc, {
+    columns: [{ label: 'Kalem', weight: 3 }, { label: 'Tutar', weight: 2, align: 'right' }, { label: 'Payı', weight: 1.2, align: 'right' }],
+    rows: [
+      [{ text: 'Toplam hasılat', font: 'semi' }, { text: formatCurrency(t.gross), font: 'semi', color: C.accent }, '%100'],
+      ...kalemler.map(([label, value, color]) => [label, { text: formatCurrency(value), color }, pay(value)]),
+      [
+        { text: 'Kalan', font: 'bold' },
+        { text: formatCurrency(t.net), font: 'bold', color: t.net >= 0 ? C.ok : C.bad },
+        { text: '%' + t.margin, font: 'semi' },
+      ],
+    ],
+  });
+
+
+  const range = doc.bufferedPageRange();
+  for (let index = 0; index < range.count; index += 1) {
+    doc.switchToPage(range.start + index);
+    footer(doc, index + 1);
+  }
+
+  return doc;
+}
+
 /* Genel rapor: kira ve otobüs yan yana, altta birleşik net. */
 function buildCombinedReportPdf(report) {
   const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 38, bufferPages: true });
@@ -843,6 +967,7 @@ function fileNameFor(kind, value, extra) {
   if (kind === 'bus') {
     return 'otobus-hatti-' + value + '-' + String(extra).padStart(2, '0') + '.pdf';
   }
+  if (kind === 'bus-period') return 'otobus-hatti-' + value + '-' + extra + '.pdf';
   if (kind === 'combined') return 'genel-rapor-son-' + value + '-ay.pdf';
   return 'vedat-gayrimenkul-son-' + value + '-ay.pdf';
 }
@@ -862,6 +987,7 @@ function pdfToBuffer(doc) {
 module.exports = {
   buildAnnualReportPdf,
   buildBusMonthReportPdf,
+  buildBusPeriodReportPdf,
   buildCombinedReportPdf,
   buildMonthReportPdf,
   buildRangeReportPdf,

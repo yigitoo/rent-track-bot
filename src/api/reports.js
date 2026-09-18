@@ -8,6 +8,7 @@ const busService = require('../services/bus');
 const {
   buildAnnualReportPdf,
   buildBusMonthReportPdf,
+  buildBusPeriodReportPdf,
   buildCombinedReportPdf,
   buildMonthReportPdf,
   buildRangeReportPdf,
@@ -55,6 +56,21 @@ module.exports = async (req, res) => {
       const report = await busService.monthReport({ month, year, busId: String(req.query.busId || '') });
       if (!wantsPdf) return res.status(200).json(report);
       return streamPdf(res, buildBusMonthReportPdf(report), fileNameFor('bus', year, month));
+    }
+
+    if (scope === 'bus-period') {
+      const busId = String(req.query.busId || '');
+      const report = await busService.periodReport({
+        start: req.query.start,
+        end: req.query.end,
+        busId: mongoose.isValidObjectId(busId) ? busId : '',
+      });
+      if (!wantsPdf) return res.status(200).json(report);
+      return streamPdf(
+        res,
+        buildBusPeriodReportPdf(report),
+        fileNameFor('bus-period', report.startDate, report.endDate)
+      );
     }
 
     if (scope === 'combined') {
