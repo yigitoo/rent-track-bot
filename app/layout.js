@@ -16,7 +16,7 @@ export const metadata = {
   metadataBase: new URL(siteUrl),
   title: "Vedat Gayrimenkul · Kira takip paneli",
   description: "Kiracı, ödeme ve Telegram bildirimlerini tek akışta yönetin.",
-  applicationName: "Vedat Gayrimenkul",
+  applicationName: "Kira Takip",
   manifest: "/manifest.webmanifest",
   openGraph: {
     title: "Vedat Gayrimenkul · Kira takip paneli",
@@ -50,7 +50,7 @@ export const metadata = {
   // iPhone'da ana ekrana eklendiğinde tam uygulama gibi açılsın
   appleWebApp: {
     capable: true,
-    title: "Vedat Gayrimenkul",
+    title: "Kira Takip",
     statusBarStyle: "default",
   },
   formatDetection: { telephone: false },
